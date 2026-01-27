@@ -33,6 +33,7 @@ import time
 import os
 from dotenv import load_dotenv
 
+from src.components.ChatHistory.ChatSessionDB import ChatSessionMySQL
 from src.components.ChatHistory.ChatHistoryDB import ChatHistoryDB
 
 load_dotenv()
@@ -299,7 +300,7 @@ class RAGApplication:
 
 class ChatHistoryHandler:
     def __init__(self):
-        self.cacheHandler = ChatHistoryDB(username = parser['MONGODB']['mongodb_username'],
+        self.chatHistoryMongoDB = ChatHistoryDB(username = parser['MONGODB']['mongodb_username'],
                                           password = parser['MONGODB']['mongodb_password'],
                                           hostname = parser['MONGODB']['mongodb_hostname'],
                                           database = parser['MONGODB']['mongodb_database'],
@@ -308,7 +309,8 @@ class ChatHistoryHandler:
                                           )
 
     def retrive_chat(self, username, session_id):
-        pass
+        results = self.chatHistoryMongoDB.get_record(username=username, session_id=session_id)
+        return results
 
     def insert_chat_record(self, message, username, session_id, timestamp, role):
         data = {
@@ -319,8 +321,28 @@ class ChatHistoryHandler:
             "timestamp": timestamp,
             "role": role
         }
-        self.cacheHandler.insert_record(data)
+        self.chatHistoryMongoDB.insert_record(data)
 
+class ChatSessionListHandler:
+    def __init__(self):
+        self.chatSessionMySQL = ChatSessionMySQL(host = parser["MYSQL"]["mysql_hostname"],
+                                        port = parser["MYSQL"]["mysql_port"],
+                                        username = parser["MYSQL"]["mysql_username"],
+                                        password = parser["MYSQL"]["mysql_password"],
+                                        database = parser["MYSQL"]["mysql_database"]
+                                        )
+
+    def retrive_chat(self, username):
+        results = self.chatSessionMySQL.get_user_by_username(username=username)
+        return results
+
+    def insert_chat_record(self, session_id, username, description, timestamp):
+        self.chatSessionMySQL.insert_new_session(
+            session_id = session_id,
+            username = username,
+            description = description,
+            timestamp = timestamp
+        )
 
 if __name__ == "__main__":
     docs_path = "https://en.wikipedia.org/wiki/Northeast_India"

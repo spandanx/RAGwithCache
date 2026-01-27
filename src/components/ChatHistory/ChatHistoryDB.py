@@ -1,3 +1,5 @@
+import logging
+
 from pymongo import MongoClient
 
 class ChatHistoryDB:
@@ -11,9 +13,12 @@ class ChatHistoryDB:
 
         return client[database][keyspace]
 
-    def get_record(self, key):
-        item_details = self.database.find_one({"key": key})
-        return item_details
+    def get_record(self, session_id, username):
+        # item_details = self.database.find_one({"key": key})
+        # logging.info("get_record()")
+        chat_history = self.database.find({"session_id":session_id,"username":username}).sort("timestamp", -1)
+        # logging.info(chat_history)
+        return chat_history
 
     def insert_record(self, data):
         response = self.database.insert_one(data)
