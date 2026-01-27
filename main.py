@@ -33,6 +33,8 @@ import time
 import os
 from dotenv import load_dotenv
 
+from src.components.ChatHistory.ChatHistoryDB import ChatHistoryDB
+
 load_dotenv()
 os.environ["OPENAI_API_KEY"]=os.getenv("OPENAI_API_KEY")
 
@@ -151,7 +153,7 @@ class RAGRetriever:
         if cached_result:
             # Cache hit - return immediately
             # print(f"Cache HIT - Response time: {elapsed:.2f}s")
-            logging.info("Cache hit - query: ", query)
+            logging.info("Cache hit - query: ", query_text)
             response = cached_result[0]['response']
             return Command(
                 goto='final_node',
@@ -161,6 +163,7 @@ class RAGRetriever:
                 }
             )
         else:
+            logging.info("Cache miss - query: ", query_text)
             return Command(
                 goto='vector_retriever',
                 update={
@@ -183,11 +186,13 @@ class RAGRetriever:
     def retrieve_documents_from_vector_db(self, state: RAGGraphState) -> Command[Literal["generate"]]:
         # reranked_docs = self.reranker_retriever.invoke({"query": query})
         # return reranked_docs
+        logging.info("retrieving related documents, query: ", state["query"])
         retriever = self.vector_store.as_retriever()
         docs = retriever.invoke(state["query"])
         # state["docs"] = docs
         # return state
         context =  "\n\n".join([doc.page_content for doc in docs])
+        logging.info("retrieving done, query: ", state["query"])
         return Command(
             goto="generate",
             update={
@@ -205,11 +210,13 @@ class RAGRetriever:
             "Question: {question} \n"
             "Context: {context}"
         )
+        logging.info("Generating response, query: ", state["query"])
         prompt = GENERATE_PROMPT.format(question=state["query"], context=state["internal_retrieved_documents"])
         response = self.llm.invoke([{"role": "user", "content": prompt}])
         # self.reranker_retriever = ContextualCompressionRetriever(
         #     base_compressor=compressor, base_retriever=retriever
         # )
+        logging.info("Generated response, query: ", state["query"])
         return Command(
             goto="final_node",
             update={
@@ -226,6 +233,7 @@ class RAGRetriever:
                 vector=state["query_embedding"]
             )
             logging.info("Cached answer")
+        logging.info("Generated final answer, query: ", state["query"])
         return Command(
             goto=END,
             update={
@@ -288,6 +296,30 @@ class RAGApplication:
             self.load_store()
         response = self.rag_chain.query(question)
         return response
+
+class ChatHistoryHandler:
+    def __init__(self):
+        self.cacheHandler = ChatHistoryDB(username = parser['MONGODB']['mongodb_username'],
+                                          password = parser['MONGODB']['mongodb_password'],
+                                          hostname = parser['MONGODB']['mongodb_hostname'],
+                                          database = parser['MONGODB']['mongodb_database'],
+                                          keyspace = parser['MONGODB']['mongodb_keyspace'],
+                                          port = parser['MONGODB']['mongodb_port']
+                                          )
+
+    def retrive_chat(self, username, session_id):
+        pass
+
+    def insert_chat_record(self, message, username, session_id, timestamp, role):
+        data = {
+            "key": username + "_" + session_id + "_" + timestamp,
+            "data": message,
+            "username": username,
+            "session_id": session_id,
+            "timestamp": timestamp,
+            "role": role
+        }
+        self.cacheHandler.insert_record(data)
 
 
 if __name__ == "__main__":
