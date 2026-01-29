@@ -103,7 +103,7 @@ for thread_id in st.session_state['chat_threads'][::-1]:
         messages = load_conversation(username=st.session_state['user_id'], session_id=st.session_state['thread_id'])
 
         temp_messages = []
-        # st.session_state['message_history'] = []
+        st.session_state['message_history'] = []
         logging.info("Iterating over messages")
         for msg in messages:
             logging.info("MESSAGE")
@@ -114,22 +114,28 @@ for thread_id in st.session_state['chat_threads'][::-1]:
             else:
                 role='assistant'
                 logging.info("MESSAGE - assistant")
-            temp_messages.append({'role': role, 'content': "HI there"})
+            temp_messages.append({'role': msg["role"], 'content': msg["data"]})
             # st.session_state['message_history'].append({'role': 'user', 'content': msg["data"]})
 
         st.session_state['message_history'] = temp_messages
 
 ################ Load conversations ##################
+logging.info("Loading conversations, .............")
+for msg in st.session_state['message_history']:
+    if msg["role"] == "user":
+        with st.chat_message("user", avatar="🧑‍💻"):
+            st.write(msg["content"])
+    else:
+        with st.chat_message("assistant", avatar="🤖"):
+            st.write(msg["content"])
 
 user_input = st.chat_input('Type here')
 
 if user_input:
-    st.session_state['message_history'].append({'role': 'user', 'content': "Alpha"})
-    st.session_state['message_history'].append({'role': 'assistant', 'content': "Gamma"})
 
     st.session_state['message_history'].append({'role': 'user', 'content': user_input})
-    with st.chat_message('user'):
-        st.text(user_input)
+    with st.chat_message("user", avatar="🧑‍💻"):
+        st.write(user_input)
 
     ## ------- Insert user message ---------
     now = datetime.now()
@@ -143,8 +149,8 @@ if user_input:
 
     # first add the message to message_history
     st.session_state['message_history'].append({'role': 'assistant', 'content': ai_message})
-    with st.chat_message('assistant'):
-        st.text(ai_message)
+    with st.chat_message("assistant", avatar="🤖"):
+        st.write(ai_message)
     ## ------- Insert assistant message ---------
     now = datetime.now()
     time_string = now.strftime("%Y-%m-%dT%H:%M:%S")
