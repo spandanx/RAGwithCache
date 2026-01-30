@@ -116,6 +116,7 @@ class RAGGraphState(TypedDict):
     final_response: str
     query_embedding: list
     is_cached: bool
+    chat_history: str
 
 
 class RAGRetriever:
@@ -154,7 +155,7 @@ class RAGRetriever:
         if cached_result:
             # Cache hit - return immediately
             # print(f"Cache HIT - Response time: {elapsed:.2f}s")
-            logging.info("Cache hit - query: ", query_text)
+            logging.info("Cache hit - query: " + query_text)
             response = cached_result[0]['response']
             return Command(
                 goto='final_node',
@@ -164,7 +165,7 @@ class RAGRetriever:
                 }
             )
         else:
-            logging.info("Cache miss - query: ", query_text)
+            logging.info("Cache miss - query: " + query_text)
             return Command(
                 goto='vector_retriever',
                 update={
@@ -187,13 +188,13 @@ class RAGRetriever:
     def retrieve_documents_from_vector_db(self, state: RAGGraphState) -> Command[Literal["generate"]]:
         # reranked_docs = self.reranker_retriever.invoke({"query": query})
         # return reranked_docs
-        logging.info("retrieving related documents, query: ", state["query"])
+        logging.info("retrieving related documents, query: " + state["query"])
         retriever = self.vector_store.as_retriever()
         docs = retriever.invoke(state["query"])
         # state["docs"] = docs
         # return state
         context =  "\n\n".join([doc.page_content for doc in docs])
-        logging.info("retrieving done, query: ", state["query"])
+        logging.info("retrieving done, query: " + state["query"])
         return Command(
             goto="generate",
             update={
@@ -206,18 +207,20 @@ class RAGRetriever:
         GENERATE_PROMPT = (
             "You are an assistant for question-answering tasks.\n"
             "Use the following pieces of retrieved context to answer the question.\n"
-            "If you don't know the answer, just say that you don't know and do not generate responses on your own.\n"
+            "If the answer cannot be found from the context, just say that you don't know, ask if you can help with other questions and do not generate responses on your own.\n"
             "Keep the answer short and concise.\n"
+            "Existing conversations: {chat_history}"
             "Question: {question} \n"
             "Context: {context}"
         )
-        logging.info("Generating response, query: ", state["query"])
-        prompt = GENERATE_PROMPT.format(question=state["query"], context=state["internal_retrieved_documents"])
+
+        logging.info("Generating response, query: " + state["query"])
+        prompt = GENERATE_PROMPT.format(question=state["query"], chat_history=state["chat_history"], context=state["internal_retrieved_documents"])
         response = self.llm.invoke([{"role": "user", "content": prompt}])
         # self.reranker_retriever = ContextualCompressionRetriever(
         #     base_compressor=compressor, base_retriever=retriever
         # )
-        logging.info("Generated response, query: ", state["query"])
+        logging.info("Generated response, query: " + state["query"])
         return Command(
             goto="final_node",
             update={
@@ -234,7 +237,7 @@ class RAGRetriever:
                 vector=state["query_embedding"]
             )
             logging.info("Cached answer")
-        logging.info("Generated final answer, query: ", state["query"])
+        logging.info("Generated final answer, query: " + state["query"])
         return Command(
             goto=END,
             update={
@@ -254,8 +257,8 @@ class RAGRetriever:
         graph.set_finish_point("final_node")
         return graph.compile()
 
-    def query(self, query):
-        response = self.graph.invoke({"query": query})
+    def query(self, query, chat_history):
+        response = self.graph.invoke({"query": query, "chat_history": chat_history})
         return response["final_response"]
 
 class RAGApplication:
@@ -291,11 +294,11 @@ class RAGApplication:
         logging.info("loaded vector store")
         self.rag_chain = RAGRetriever(vector_store=self.vector_manager.vector_store)
 
-    def answer_question(self, question: str) -> str:
+    def answer_question(self, question: str, chat_history: str) -> str:
         # return self.rag_chain.query(question)
         if self.rag_chain is None:
             self.load_store()
-        response = self.rag_chain.query(question)
+        response = self.rag_chain.query(question, chat_history)
         return response
 
 class ChatHistoryHandler:
@@ -347,17 +350,19 @@ class ChatSessionListHandler:
 if __name__ == "__main__":
     docs_path = "https://en.wikipedia.org/wiki/Northeast_India"
 
-    rag_app = RAGApplication()
+    # rag_app = RAGApplication()
+    #
+    # rag_app.ingest_data(docs_path)
     # rag_app.load_store()
     #
-    while True:
-        query = input("question - ")
-        # query = "Which is the highest peak in Northeast?"
-        # query = "What is the longest river in Earth"
-        if query.lower() in ["exit", "quit"]:
-            break
-        answer = rag_app.answer_question(query)
-        print("\nAnswer:", answer, "\n")
+    # while True:
+    #     query = input("question - ")
+    #     # query = "Which is the highest peak in Northeast?"
+    #     # query = "What is the longest river in Earth"
+    #     if query.lower() in ["exit", "quit"]:
+    #         break
+    #     answer = rag_app.answer_question(query)
+    #     print("\nAnswer:", answer, "\n")
 
     # embedding = OpenAIEmbeddings(dimensions=768, model="text-embedding-3-small")
     #

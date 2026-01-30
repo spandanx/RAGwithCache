@@ -94,6 +94,15 @@ def load_conversation(username, session_id):
     # return state.values.get('messages', [])
     return messages
 
+def format_chat_history():
+    chat_history = ""
+    for msg in st.session_state['message_history']:
+        if msg["role"] == "user":
+            chat_history += "User: " + msg["content"] + "\n"
+        else:
+            chat_history += "Assistant: " + msg["content"] + "\n"
+    return chat_history
+
 
 for thread_id in st.session_state['chat_threads'][::-1]:
     if st.sidebar.button(str(thread_id), key=thread_id):
@@ -145,7 +154,8 @@ if user_input:
                                           session_id = str(st.session_state['thread_id']),
                                           timestamp = time_string,
                                           role = "user")
-    ai_message = rag_app.answer_question(user_input)
+    chat_history = format_chat_history()
+    ai_message = rag_app.answer_question(user_input, chat_history)
 
     # first add the message to message_history
     st.session_state['message_history'].append({'role': 'assistant', 'content': ai_message})
