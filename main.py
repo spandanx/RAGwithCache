@@ -1,4 +1,4 @@
-from typing import List, TypedDict, Annotated, Sequence
+from typing import List, TypedDict, Annotated, Sequence, Optional
 
 import logging
 
@@ -7,6 +7,7 @@ from langchain.chains.retrieval_qa.base import RetrievalQA
 from langchain_community.document_loaders import WebBaseLoader
 from langchain_core.documents import Document
 from langchain_core.messages import BaseMessage
+from langchain_core.output_parsers import PydanticOutputParser, JsonOutputParser
 from langchain_core.prompts import PromptTemplate
 from langchain_openai import ChatOpenAI, OpenAIEmbeddings
 from langchain_google_genai import ChatGoogleGenerativeAI
@@ -15,6 +16,8 @@ from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_qdrant import QdrantVectorStore
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langgraph.graph import StateGraph, add_messages, END
+from pydantic import BaseModel
+from pydantic.v1 import Field
 from qdrant_client import QdrantClient
 from qdrant_client.http.models import Distance, VectorParams
 from langchain.retrievers import ContextualCompressionRetriever
@@ -113,7 +116,7 @@ class RAGGraphState(TypedDict):
     internal_retrieved_documents: str
     generated_summary: str
     query: str
-    final_response: str
+    final_response: dict
     query_embedding: list
     is_cached: bool
     chat_history: str
@@ -193,8 +196,18 @@ class RAGRetriever:
         docs = retriever.invoke(state["query"])
         # state["docs"] = docs
         # return state
-        context =  "\n\n".join([doc.page_content for doc in docs])
+        # logging.info("Iterating over fetched documents")
+        # for doc in docs:
+        #     logging.info(doc)
+        #     logging.info(doc.page_content)
+        #     logging.info(doc.metadata)
+        #     logging.info(doc.metadata["source"])
+        context =  "\n\n".join(["Content: " + doc.page_content + "\n Source: " + doc.metadata["source"] for doc in docs])
+
         logging.info("retrieving done, query: " + state["query"])
+        logging.info("CONTEXT:")
+        logging.info(context)
+
         return Command(
             goto="generate",
             update={
@@ -212,28 +225,61 @@ class RAGRetriever:
             "Existing conversations: {chat_history}"
             "Question: {question} \n"
             "Context: {context}"
+            
+            "return the link of the source as well in a list of strings"
+            "Follow the format instruction for the output {format_instruction}"
+        )
+        # logging.info("Generating response, query: " + state["query"])
+        # prompt = GENERATE_PROMPT.format(question=state["query"], chat_history=state["chat_history"],
+        #                                 context=state["internal_retrieved_documents"])
+        # response = self.llm.invoke([{"role": "user", "content": prompt}])
+
+        class ResponseFormat(BaseModel):
+            answer: str = Field(description="Answer of the question")
+            source: Optional[list[str]] = Field(description="List of sources of the retrieved data")
+
+        parser = PydanticOutputParser(pydantic_object=ResponseFormat)
+
+        prompt = PromptTemplate(
+            template=GENERATE_PROMPT,
+            input_variables=["chat_history", "question", "context"],
+            partial_variables={"format_instruction": parser.get_format_instructions()}
         )
 
-        logging.info("Generating response, query: " + state["query"])
-        prompt = GENERATE_PROMPT.format(question=state["query"], chat_history=state["chat_history"], context=state["internal_retrieved_documents"])
-        response = self.llm.invoke([{"role": "user", "content": prompt}])
+        chain = prompt | self.llm | parser
+        response = chain.invoke({"question":state["query"],
+                                 "chat_history":state["chat_history"],
+                                 "context":state["internal_retrieved_documents"]})
         # self.reranker_retriever = ContextualCompressionRetriever(
         #     base_compressor=compressor, base_retriever=retriever
+        dict_response = response.model_dump()
         # )
         logging.info("Generated response, query: " + state["query"])
+        logging.info("RESPONSE")
+        logging.info(type(response))
+        logging.info(response)
+        logging.info("JSON RESPONSE")
+        logging.info(type(dict_response))
+        logging.info(dict_response)
         return Command(
             goto="final_node",
             update={
-                "final_response": response.content
+                "final_response": dict_response
             }
         )
 
     def final_node(self, state: RAGGraphState) -> Command[Literal[END]]:
 
+        logging.info("Called final_node()")
+        logging.info(state["final_response"])
+        logging.info(type(state["final_response"]))
+        logging.info(state["final_response"]["answer"])
+        logging.info(type(state["final_response"]["answer"]))
+
         if not state["is_cached"]:
             self.llmcache.store(
                 prompt=state["query"],
-                response=state["final_response"],
+                response=state["final_response"]["answer"],
                 vector=state["query_embedding"]
             )
             logging.info("Cached answer")
@@ -259,6 +305,8 @@ class RAGRetriever:
 
     def query(self, query, chat_history):
         response = self.graph.invoke({"query": query, "chat_history": chat_history})
+        logging.info("Query answer")
+        logging.info(response)
         return response["final_response"]
 
 class RAGApplication:
