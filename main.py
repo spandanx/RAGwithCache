@@ -1,3 +1,4 @@
+import asyncio
 from typing import List, TypedDict, Annotated, Sequence, Optional
 
 import logging
@@ -303,11 +304,17 @@ class RAGRetriever:
         graph.set_finish_point("final_node")
         return graph.compile()
 
-    def query(self, query, chat_history):
-        response = self.graph.invoke({"query": query, "chat_history": chat_history})
+    async def query(self, query, chat_history):
+        # logging.info("STREAM DATA")
+        async for event in self.graph.astream_events(input={"query": query, "chat_history": chat_history}, version="v2"):
+            # logging.info("Streaming... -> ")
+            # logging.info(event)
+            yield event
         # logging.info("Query answer")
         # logging.info(response)
-        return response["final_response"]
+        # response = self.graph.invoke({"query": query, "chat_history": chat_history})
+        # return response["final_response"]
+        # return self.graph.astream_events(input={"query": query, "chat_history": chat_history}, version="v2")
 
 class RAGApplication:
     def __init__(self):
@@ -342,12 +349,23 @@ class RAGApplication:
         logging.info("loaded vector store")
         self.rag_chain = RAGRetriever(vector_store=self.vector_manager.vector_store)
 
-    def answer_question(self, question: str, chat_history: str) -> str:
+    async def answer_question(self, question: str, chat_history: str) -> str:
         # return self.rag_chain.query(question)
         if self.rag_chain is None:
             self.load_store()
-        response = self.rag_chain.query(question, chat_history)
-        return response
+        # async_response = await
+        # logging.info(async_response)
+        # logging.info("Waited !!!!!!")
+        #
+        async for event in self.rag_chain.query(question, chat_history):
+            # yield event
+            logging.info("Steaming... *************")
+            logging.info(event)
+            yield event
+        #
+        # return async_response
+        # return self.rag_chain.query(question, chat_history)
+
 
 class ChatHistoryHandler:
     def __init__(self):
@@ -395,22 +413,41 @@ class ChatSessionListHandler:
             timestamp = timestamp
         )
 
+async def query_data():
+    # query = input("question - ")
+    query = "Which is the highest peak in Northeast?"
+    # query = "What is the longest river in Earth"
+    # async_response =
+    # logging.info(async_response)
+    logging.info("Waited -----------")
+
+    async for event in rag_app.answer_question(question=query, chat_history=""):
+        logging.info("10101010---------")
+        print(event)
+
+    logging.info("Completed -----------")
+    # answer = await rag_app.answer_question(question=query, chat_history="")
+    # print("\nAnswer:", answer, "\n")
+    # return answer
+    return "Sample Response"
+
 if __name__ == "__main__":
     docs_path = "https://en.wikipedia.org/wiki/Northeast_India"
 
-    # rag_app = RAGApplication()
+    rag_app = RAGApplication()
     #
     # rag_app.ingest_data(docs_path)
     # rag_app.load_store()
     #
+    asyncio.run(query_data())
     # while True:
-    #     query = input("question - ")
-    #     # query = "Which is the highest peak in Northeast?"
+    #     # query = input("question - ")
+    #     query = "Which is the highest peak in Northeast?"
     #     # query = "What is the longest river in Earth"
     #     if query.lower() in ["exit", "quit"]:
     #         break
-    #     answer = rag_app.answer_question(query)
-    #     print("\nAnswer:", answer, "\n")
+        # answer = rag_app.answer_question(question=query, chat_history="")
+        # print("\nAnswer:", answer, "\n")
 
     # embedding = OpenAIEmbeddings(dimensions=768, model="text-embedding-3-small")
     #
