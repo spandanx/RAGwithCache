@@ -254,13 +254,13 @@ class RAGRetriever:
         #     base_compressor=compressor, base_retriever=retriever
         dict_response = response.model_dump()
         # )
-        logging.info("Generated response, query: " + state["query"])
-        logging.info("RESPONSE")
-        logging.info(type(response))
-        logging.info(response)
-        logging.info("JSON RESPONSE")
-        logging.info(type(dict_response))
-        logging.info(dict_response)
+        # logging.info("Generated response, query: " + state["query"])
+        # logging.info("RESPONSE")
+        # logging.info(type(response))
+        # logging.info(response)
+        # logging.info("JSON RESPONSE")
+        # logging.info(type(dict_response))
+        # logging.info(dict_response)
         return Command(
             goto="final_node",
             update={
@@ -270,11 +270,11 @@ class RAGRetriever:
 
     def final_node(self, state: RAGGraphState) -> Command[Literal[END]]:
 
-        logging.info("Called final_node()")
-        logging.info(state["final_response"])
-        logging.info(type(state["final_response"]))
-        logging.info(state["final_response"]["answer"])
-        logging.info(type(state["final_response"]["answer"]))
+        # logging.info("Called final_node()")
+        # logging.info(state["final_response"])
+        # logging.info(type(state["final_response"]))
+        # logging.info(state["final_response"]["answer"])
+        # logging.info(type(state["final_response"]["answer"]))
 
         if not state["is_cached"]:
             self.llmcache.store(
@@ -305,8 +305,8 @@ class RAGRetriever:
 
     def query(self, query, chat_history):
         response = self.graph.invoke({"query": query, "chat_history": chat_history})
-        logging.info("Query answer")
-        logging.info(response)
+        # logging.info("Query answer")
+        # logging.info(response)
         return response["final_response"]
 
 class RAGApplication:

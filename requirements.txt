@@ -1,2 +1,3 @@
 redisvl
 hf_xet
+streamlit-extras

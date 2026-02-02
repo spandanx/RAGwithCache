@@ -1,12 +1,14 @@
 import logging
 import asyncio
 import streamlit as st
+from streamlit_extras.mention import mention
 # from langgraph_backend import chatbot
 from langchain_core.messages import HumanMessage
 import uuid
 
 from main import RAGApplication, ChatHistoryHandler, ChatSessionListHandler
 from datetime import datetime
+import re
 
 rag_app = RAGApplication()
 chatHistoryHandler = ChatHistoryHandler()
@@ -103,6 +105,27 @@ def format_chat_history():
             chat_history += "Assistant: " + msg["content"] + "\n"
     return chat_history
 
+def show_ai_chat(ai_message):
+    with st.chat_message("assistant", avatar="🤖"):
+        st.write(ai_message["content"]["answer"])
+
+    # citations = re.findall(r'\[(web|cite|page):(\d+)\]', msg["content"])
+    # logging.info("citations, ")
+    # logging.info("SOURCE")
+    # for source in ai_message["content"]["source"]:
+    #     logging.info(source)
+
+        if "source" in ai_message["content"]:
+            # st.markdown("**Sources:**")
+            st.write("**Sources:**")
+            # for i, (source_type, index) in enumerate(citations, 1):
+            for source_url in ai_message["content"]["source"]:
+                # Replace with actual URLs from your data sources (e.g., session_state or msg["sources"])
+                # source_label = f"{source_type.upper()}{index}"
+                # logging.info("source_url: " + source_url)
+                # logging.info("source_label: " + source_label)
+                mention(label=source_url, icon="🔗", url=source_url)
+
 
 for thread_id in st.session_state['chat_threads'][::-1]:
     if st.sidebar.button(str(thread_id), key=thread_id):
@@ -135,8 +158,9 @@ for msg in st.session_state['message_history']:
         with st.chat_message("user", avatar="🧑‍💻"):
             st.write(msg["content"])
     else:
-        with st.chat_message("assistant", avatar="🤖"):
-            st.write(msg["content"])
+        # with st.chat_message("assistant", avatar="🤖"):
+        #     st.write(msg["content"])
+        show_ai_chat(msg)
 
 user_input = st.chat_input('Type here')
 
@@ -159,8 +183,9 @@ if user_input:
 
     # first add the message to message_history
     st.session_state['message_history'].append({'role': 'assistant', 'content': ai_message})
-    with st.chat_message("assistant", avatar="🤖"):
-        st.write(ai_message)
+    # with st.chat_message("assistant", avatar="🤖"):
+    #     st.write(ai_message)
+    show_ai_chat(ai_message)
     ## ------- Insert assistant message ---------
     now = datetime.now()
     time_string = now.strftime("%Y-%m-%dT%H:%M:%S")
