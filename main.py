@@ -160,7 +160,7 @@ class RAGRetriever:
             # Cache hit - return immediately
             # print(f"Cache HIT - Response time: {elapsed:.2f}s")
             logging.info("Cache hit - query: " + query_text)
-            response = cached_result[0]['response']
+            response = cached_result[0]['metadata']
             return Command(
                 goto='final_node',
                 update={
@@ -205,9 +205,9 @@ class RAGRetriever:
         #     logging.info(doc.metadata["source"])
         context =  "\n\n".join(["Content: " + doc.page_content + "\n Source: " + doc.metadata["source"] for doc in docs])
 
-        logging.info("retrieving done, query: " + state["query"])
-        logging.info("CONTEXT:")
-        logging.info(context)
+        # logging.info("retrieving done, query: " + state["query"])
+        # logging.info("CONTEXT:")
+        # logging.info(context)
 
         return Command(
             goto="generate",
@@ -227,7 +227,7 @@ class RAGRetriever:
             "Question: {question} \n"
             "Context: {context}"
             
-            "return the link of the source as well in a list of strings"
+            "return the link of the source as well in a LIST/Array of strings, do not return as string, it must be a list/Array, return empty list if not found"
             "Follow the format instruction for the output {format_instruction}"
         )
         # logging.info("Generating response, query: " + state["query"])
@@ -281,6 +281,7 @@ class RAGRetriever:
             self.llmcache.store(
                 prompt=state["query"],
                 response=state["final_response"]["answer"],
+                metadata=state["final_response"],
                 vector=state["query_embedding"]
             )
             logging.info("Cached answer")
@@ -304,16 +305,16 @@ class RAGRetriever:
         graph.set_finish_point("final_node")
         return graph.compile()
 
-    async def query(self, query, chat_history):
+    def query(self, query, chat_history):
         # logging.info("STREAM DATA")
-        async for event in self.graph.astream_events(input={"query": query, "chat_history": chat_history}, version="v2"):
+        # async for event in self.graph.astream_events(input={"query": query, "chat_history": chat_history}, version="v2"):
             # logging.info("Streaming... -> ")
             # logging.info(event)
-            yield event
+            # yield event
         # logging.info("Query answer")
         # logging.info(response)
-        # response = self.graph.invoke({"query": query, "chat_history": chat_history})
-        # return response["final_response"]
+        response = self.graph.invoke({"query": query, "chat_history": chat_history})
+        return response["final_response"]
         # return self.graph.astream_events(input={"query": query, "chat_history": chat_history}, version="v2")
 
 class RAGApplication:
@@ -349,7 +350,7 @@ class RAGApplication:
         logging.info("loaded vector store")
         self.rag_chain = RAGRetriever(vector_store=self.vector_manager.vector_store)
 
-    async def answer_question(self, question: str, chat_history: str) -> str:
+    def answer_question(self, question: str, chat_history: str) -> str:
         # return self.rag_chain.query(question)
         if self.rag_chain is None:
             self.load_store()
@@ -357,11 +358,31 @@ class RAGApplication:
         # logging.info(async_response)
         # logging.info("Waited !!!!!!")
         #
-        async for event in self.rag_chain.query(question, chat_history):
+        response = self.rag_chain.query(question, chat_history)
+        return response
+        # async for event in self.rag_chain.query(question, chat_history):
             # yield event
-            logging.info("Steaming... *************")
-            logging.info(event)
-            yield event
+            # logging.info("Steaming... *************")
+            # logging.info(event)
+            # if event["event"] == "on_chat_model_stream":
+                # filtered_event = {"event": event["event"],
+                #                   "name": event["name"],
+                #                   "data": event["data"],
+                #                   "content": event["data"]["chunk"].content
+                #                   }
+                # yield filtered_event
+                # yield event["data"]["chunk"].content
+
+            # elif event["event"] == "on_chain_end" and ((isinstance(event["data"]["output"], dict) and event["data"]["output"].get("final_response") is not None)):
+                # filtered_event = {"event": event["event"],
+                #                   "data": {
+                #                       "output": {
+                #                                 "final_response": event["data"]["output"]["final_response"]
+                #                         } if (isinstance(event["data"]["output"], dict) and event["data"]["output"].get("final_response") is not None) else {}
+                #                   }
+                #                   }
+                # yield filtered_event
+                # yield event["data"]["output"]["final_response"]
         #
         # return async_response
         # return self.rag_chain.query(question, chat_history)
@@ -415,6 +436,7 @@ class ChatSessionListHandler:
 
 async def query_data():
     # query = input("question - ")
+    # query = "Which is the highest peak in Northeast?"
     query = "Which is the highest peak in Northeast?"
     # query = "What is the longest river in Earth"
     # async_response =
@@ -423,7 +445,7 @@ async def query_data():
 
     async for event in rag_app.answer_question(question=query, chat_history=""):
         logging.info("10101010---------")
-        print(event)
+        logging.info(event)
 
     logging.info("Completed -----------")
     # answer = await rag_app.answer_question(question=query, chat_history="")
@@ -447,7 +469,7 @@ if __name__ == "__main__":
     #     if query.lower() in ["exit", "quit"]:
     #         break
         # answer = rag_app.answer_question(question=query, chat_history="")
-        # print("\nAnswer:", answer, "\n")
+        # logging.info("\nAnswer:", answer, "\n")
 
     # embedding = OpenAIEmbeddings(dimensions=768, model="text-embedding-3-small")
     #

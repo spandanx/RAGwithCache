@@ -11,6 +11,8 @@ from datetime import datetime
 import re
 
 rag_app = RAGApplication()
+if rag_app.rag_chain is None:
+    rag_app.load_store()
 chatHistoryHandler = ChatHistoryHandler()
 chatSessionListHandler = ChatSessionListHandler()
 
@@ -97,35 +99,75 @@ def load_conversation(username, session_id):
     return messages
 
 def format_chat_history():
+    logging.info("format_chat_history()")
     chat_history = ""
     for msg in st.session_state['message_history']:
         if msg["role"] == "user":
             chat_history += "User: " + msg["content"] + "\n"
         else:
-            chat_history += "Assistant: " + msg["content"] + "\n"
+            if isinstance(msg["content"], dict) and "answer" in msg["content"]:
+                chat_history += "Assistant: " + msg["content"]["answer"] + "\n"
+            else:
+                chat_history += "Assistant: " + msg["content"] + "\n"
     return chat_history
 
 def show_ai_chat(ai_message):
+    logging.info("Called show_ai_chat()")
+    logging.info(ai_message)
     with st.chat_message("assistant", avatar="🤖"):
-        st.write(ai_message["content"]["answer"])
+        # if isinstance(ai_message, dict):
+        if "content" in ai_message:
+            if "answer" in ai_message["content"]:
+                st.write(ai_message["content"]["answer"])
 
-    # citations = re.findall(r'\[(web|cite|page):(\d+)\]', msg["content"])
-    # logging.info("citations, ")
-    # logging.info("SOURCE")
-    # for source in ai_message["content"]["source"]:
-    #     logging.info(source)
+            if "source" in ai_message["content"] and len(ai_message["content"]["source"])>0:
+                # st.markdown("**Sources:**")
+                st.write("**Sources:**")
+                # for i, (source_type, index) in enumerate(citations, 1):
+                for source_url in ai_message["content"]["source"]:
+                    # Replace with actual URLs from your data sources (e.g., session_state or msg["sources"])
+                    # source_label = f"{source_type.upper()}{index}"
+                    # logging.info("source_url: " + source_url)
+                    # logging.info("source_label: " + source_label)
+                    mention(label=source_url, icon="🔗", url=source_url)
+        else:
+            st.write(ai_message)
 
-        if "source" in ai_message["content"]:
-            # st.markdown("**Sources:**")
-            st.write("**Sources:**")
-            # for i, (source_type, index) in enumerate(citations, 1):
-            for source_url in ai_message["content"]["source"]:
-                # Replace with actual URLs from your data sources (e.g., session_state or msg["sources"])
-                # source_label = f"{source_type.upper()}{index}"
-                # logging.info("source_url: " + source_url)
-                # logging.info("source_label: " + source_label)
-                mention(label=source_url, icon="🔗", url=source_url)
-
+# async def stream_response():
+#     logging.info("Starting stream_response()")
+#     selected_key = ""
+#     current_key = ""
+#     key_already_selected = False
+#
+#     val = ""
+#     pattern = r'[^a-zA-Z0-9\n\s"\']'
+#     quotation_crawled = 0
+#     async for chunk in rag_app.answer_question(user_input, ""):
+#         # Apply custom transformations
+#         # processed = chunk.strip().upper()
+#         cleaned_chunk = re.sub(r'[\n\r]+', '', re.sub(r'[^a-zA-Z0-9,\']', '', chunk))
+#         # logging.info(chunk + " -> regex -> " + re.sub(r'[\n\r]+', ' ', re.sub(r'[^a-zA-Z0-9"\']', '', chunk)) + "|")
+#         quotation_crawled += chunk.count('"')
+#         if quotation_crawled % 4 == 1:
+#             current_key += cleaned_chunk
+#         elif quotation_crawled % 4 == 2:
+#             key_already_selected = True
+#             selected_key = current_key
+#             current_key = ""
+#         elif quotation_crawled % 4 == 3:
+#             # if val == "":
+#             val += cleaned_chunk
+#             # logging.info(
+#             #     chunk + " -> cleaned -> " + cleaned_chunk + " current_key -> " + current_key + " -> " + selected_key + " -> quotation_crawled -> " + str(quotation_crawled))
+#             yield cleaned_chunk
+#         elif quotation_crawled % 4 == 4:
+#             selected_key = ""
+#             current_key = ""
+#             # else:
+#             #     val += chunk
+#             #     yield chunk
+#         logging.info(
+#             chunk + " -> cleaned -> " + cleaned_chunk + " current_key -> " + current_key + " -> " + selected_key + " -> quotation_crawled -> " + str(quotation_crawled))
 
 for thread_id in st.session_state['chat_threads'][::-1]:
     if st.sidebar.button(str(thread_id), key=thread_id):
@@ -178,14 +220,28 @@ if user_input:
                                           session_id = str(st.session_state['thread_id']),
                                           timestamp = time_string,
                                           role = "user")
-    chat_history = format_chat_history()
+    chat_history = format_chat_history() # Modify this
     ai_message = rag_app.answer_question(user_input, chat_history)
 
     # first add the message to message_history
-    st.session_state['message_history'].append({'role': 'assistant', 'content': ai_message})
+    # st.session_state['message_history'].append({'role': 'assistant', 'content': ai_message})
     # with st.chat_message("assistant", avatar="🤖"):
     #     st.write(ai_message)
-    show_ai_chat(ai_message)
+    show_ai_chat({"content": ai_message})
+    # full_response = st.write_stream(rag_app.answer_question(user_input, chat_history))
+    # placeholder = st.empty()
+    #--------------------
+    # with st.chat_message("user", avatar="🧑‍💻"):
+    #     st.write_stream(stream_response())
+    # full_response = st.write_stream(rag_app.answer_question(user_input, ""))
+    # logging.info("Printing the full response")
+    # for message in full_response:
+    #     logging.info(message)
+    # --------------------
+    # full_response.clear()
+    # if st.button("Clear Output"):
+    #     placeholder.empty()
+    # st.session_state['message_history'].append({'role': 'assistant', 'content': full_response})
     ## ------- Insert assistant message ---------
     now = datetime.now()
     time_string = now.strftime("%Y-%m-%dT%H:%M:%S")
