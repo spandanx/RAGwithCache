@@ -13,10 +13,10 @@ class ChatHistoryDB:
 
         return client[database][keyspace]
 
-    def get_record(self, session_id, username):
+    def get_record(self, session_id, username, record_limit):
         # item_details = self.database.find_one({"key": key})
         # logging.info("get_record()")
-        chat_history = self.database.find({"session_id":session_id,"username":username}).sort("timestamp", 1)
+        chat_history = self.database.find({"session_id":session_id,"username":username}).limit(record_limit).sort("timestamp", 1)
         # logging.info(chat_history)
         return chat_history
 

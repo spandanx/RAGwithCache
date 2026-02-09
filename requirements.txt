@@ -1,3 +1,6 @@
 redisvl
 hf_xet
 streamlit-extras
+psycopg2-binary==2.9.9
+psycopg[binary]
+langgraph-checkpoint-postgres==2.0.1

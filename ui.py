@@ -90,7 +90,7 @@ if st.sidebar.button('New Chat'):
 ################ Load conversations ##################
 def load_conversation(username, session_id):
     logging.info("Called load_conversation()")
-    messages = chatHistoryHandler.retrive_chat(username=username, session_id=session_id)
+    messages = chatHistoryHandler.retrive_chat(username=username, session_id=session_id, record_limit = 5)
     # for msg in messages:
     #     logging.info(msg)
     # state = chatbot.get_state(config={'configurable': {'thread_id': thread_id}})
