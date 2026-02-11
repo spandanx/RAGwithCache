@@ -18,7 +18,6 @@ if rag_app.rag_chain is None:
 chatHistoryHandler = ChatHistoryHandler()
 chatSessionListHandler = ChatSessionListHandler()
 
-# st.session_state['user_id'] = "user11"
 
 # -------------------- Thread management start --------------------
 def generate_thread_id():
@@ -32,7 +31,7 @@ def new_chat():
     st.session_state['message_history'] = []
     chatSessionListHandler.insert_chat_record(
         session_id=str(thread_id),
-        username = st.session_state['user_id'],
+        username = st.session_state['username'],
         description = '',
         timestamp = datetime.now()
     )
@@ -61,8 +60,8 @@ def load_all_sessions(username):
 if 'message_history' not in st.session_state:
     st.session_state['message_history'] = []
 
-if 'thread_id' not in st.session_state:
-    st.session_state['thread_id'] = generate_thread_id()
+# if 'thread_id' not in st.session_state:
+#     st.session_state['thread_id'] = generate_thread_id()
 
 if 'chat_threads' not in st.session_state:
     st.session_state['chat_threads'] = []
@@ -298,49 +297,50 @@ if ('logged_in' in st.session_state) and st.session_state.logged_in:
             #     st.write(msg["content"])
             show_ai_chat(msg)
 
-    user_input = st.chat_input('Type here')
+    if 'thread_id' in st.session_state and st.session_state['thread_id'] is not None:
+        user_input = st.chat_input('Type here')
 
-    if user_input:
+        if user_input:
 
-        st.session_state['message_history'].append({'role': 'user', 'content': user_input})
-        with st.chat_message("user", avatar="🧑‍💻"):
-            st.write(user_input)
+            st.session_state['message_history'].append({'role': 'user', 'content': user_input})
+            with st.chat_message("user", avatar="🧑‍💻"):
+                st.write(user_input)
 
-        ## ------- Insert user message ---------
-        now = datetime.now()
-        time_string = now.strftime("%Y-%m-%dT%H:%M:%S")
-        chatHistoryHandler.insert_chat_record(message = user_input,
-                                              username = st.session_state['username'],
-                                              session_id = str(st.session_state['thread_id']),
-                                              timestamp = time_string,
-                                              role = "user")
-        chat_history = format_chat_history() # Modify this
-        ai_message = rag_app.answer_question(user_input, chat_history)
+            ## ------- Insert user message ---------
+            now = datetime.now()
+            time_string = now.strftime("%Y-%m-%dT%H:%M:%S")
+            chatHistoryHandler.insert_chat_record(message = user_input,
+                                                  username = st.session_state['username'],
+                                                  session_id = str(st.session_state['thread_id']),
+                                                  timestamp = time_string,
+                                                  role = "user")
+            chat_history = format_chat_history() # Modify this
+            ai_message = rag_app.answer_question(user_input, chat_history)
 
-        # first add the message to message_history
-        # st.session_state['message_history'].append({'role': 'assistant', 'content': ai_message})
-        # with st.chat_message("assistant", avatar="🤖"):
-        #     st.write(ai_message)
-        show_ai_chat({"content": ai_message})
-        # full_response = st.write_stream(rag_app.answer_question(user_input, chat_history))
-        # placeholder = st.empty()
-        #--------------------
-        # with st.chat_message("user", avatar="🧑‍💻"):
-        #     st.write_stream(stream_response())
-        # full_response = st.write_stream(rag_app.answer_question(user_input, ""))
-        # logging.info("Printing the full response")
-        # for message in full_response:
-        #     logging.info(message)
-        # --------------------
-        # full_response.clear()
-        # if st.button("Clear Output"):
-        #     placeholder.empty()
-        # st.session_state['message_history'].append({'role': 'assistant', 'content': full_response})
-        ## ------- Insert assistant message ---------
-        now = datetime.now()
-        time_string = now.strftime("%Y-%m-%dT%H:%M:%S")
-        chatHistoryHandler.insert_chat_record(message=ai_message,
-                                              username=st.session_state['username'],
-                                              session_id=str(st.session_state['thread_id']),
-                                              timestamp=time_string,
-                                              role="assistant")
+            # first add the message to message_history
+            # st.session_state['message_history'].append({'role': 'assistant', 'content': ai_message})
+            # with st.chat_message("assistant", avatar="🤖"):
+            #     st.write(ai_message)
+            show_ai_chat({"content": ai_message})
+            # full_response = st.write_stream(rag_app.answer_question(user_input, chat_history))
+            # placeholder = st.empty()
+            #--------------------
+            # with st.chat_message("user", avatar="🧑‍💻"):
+            #     st.write_stream(stream_response())
+            # full_response = st.write_stream(rag_app.answer_question(user_input, ""))
+            # logging.info("Printing the full response")
+            # for message in full_response:
+            #     logging.info(message)
+            # --------------------
+            # full_response.clear()
+            # if st.button("Clear Output"):
+            #     placeholder.empty()
+            # st.session_state['message_history'].append({'role': 'assistant', 'content': full_response})
+            ## ------- Insert assistant message ---------
+            now = datetime.now()
+            time_string = now.strftime("%Y-%m-%dT%H:%M:%S")
+            chatHistoryHandler.insert_chat_record(message=ai_message,
+                                                  username=st.session_state['username'],
+                                                  session_id=str(st.session_state['thread_id']),
+                                                  timestamp=time_string,
+                                                  role="assistant")
