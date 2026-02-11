@@ -5,7 +5,7 @@ import logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
-class ChatSessionMySQL:
+class MySQLDB:
 
     def __init__(self, host, port, username, password, database):
         self.cnx = mysql.connector.connect(
@@ -23,19 +23,25 @@ class ChatSessionMySQL:
         print("Called MysqlDB.start_connection()")
         self.cnx.reconnect()
 
-    def enrich_user_result(self, columns, result_array):
-        result = []
-        for row in result_array:
-            row_dict = dict()
-            for i in range(len(columns)):
-                # if type(row[i]) is datetime:
-                #     row_dict[columns[i]] = row[i].strftime('%Y-%m-%d %H:%M:%S.%f')[:-3]
-                # else:
-                row_dict[columns[i]] = row[i]
-            result.append(row_dict)
+    def get_user_by_username(self, username):
+        print("Calling MysqlDB.get_user_by_username()")
+        if self.cnx.is_connected():
+            print("MySQL Connection is active")
+        else:
+            # self.start_connection()
+            self.reestablish_connection()
+            print("MySQL Connection is not active")
+        # self.cur.execute("SELECT username, session_id, session_description, DATE_FORMAT(created_at, '%Y-%m-%d %H:%i:%s') AS created_at FROM chat_session where username = %s", (username, ))
+        self.cur.execute(
+            "SELECT username, hashed_password FROM cache_user where username = %s",
+            (username,))
+        desc = self.cur.description
+        columns = [col[0] for col in desc]
+        row = self.cur.fetchall()
+        result = self.enrich_user_result(columns=columns, result_array=row)
         return result
 
-    def get_user_by_username(self, username):
+    def get_chat_sessions_by_username(self, username):
         print("Calling MysqlDB.get_user_by_username()")
         if self.cnx.is_connected():
             print("MySQL Connection is active")
@@ -64,6 +70,62 @@ class ChatSessionMySQL:
         sql_insert_query = "INSERT INTO chat_session (session_id, username, session_description, created_at) values (%s, %s, %s, %s)"
         self.cur.execute(sql_insert_query, (session_id, username, description, timestamp))
         self.cnx.commit()
+
+    def enrich_user_result(self, columns, result_array):
+        result = []
+        for row in result_array:
+            row_dict = dict()
+            for i in range(len(columns)):
+                row_dict[columns[i]] = row[i]
+            result.append(row_dict)
+        return result
+
+    # def get_user_by_username(self, username):
+    #     print("Calling MysqlDB.get_user_by_username()")
+    #     if self.cnx.is_connected():
+    #         print("MySQL Connection is active")
+    #     else:
+    #         # self.start_connection()
+    #         self.reestablish_connection()
+    #         print("MySQL Connection is not active")
+    #     self.cur.execute("SELECT * FROM ats_user where username = %s", (username, ))
+    #     desc = self.cur.description
+    #     columns = [col[0] for col in desc]
+    #     row = self.cur.fetchall()
+    #     print(row)
+    #     result = self.enrich_user_result(columns=columns, result_array=row)
+    #     print("RESULT")
+    #     print(result)
+    #     return result
+
+    def update_stock_token(self, token, updated_on, username):
+        print("Calling MysqlDB.update_stock_token()")
+        print(token)
+        if self.cnx.is_connected():
+            print("MySQL Connection is active")
+        else:
+            self.reestablish_connection()
+            print("MySQL Connection is not active")
+        # sql_insert_query = "UPDATE stockdoc_user SET stock_token = 'abc', stock_token_update_date = '2023-12-31 14:30:00' WHERE username = 'adm_90'"
+        sql_insert_query = "UPDATE ats_user SET stock_token = %s, stock_token_update_date = %s WHERE username = %s"
+        self.cur.execute(sql_insert_query, (token, updated_on, username))
+        self.cnx.commit()
+
+    def get_basic_user_info(self, username):
+        print("Calling MysqlDB.get_basic_user_info()")
+        if self.cnx.is_connected():
+            print("MySQL Connection is active")
+        else:
+            # self.start_connection()
+            self.reestablish_connection()
+            print("MySQL Connection is not active")
+        self.cur.execute("SELECT username,stock_username,stock_token,CAST(stock_token_update_date AS CHAR) AS stock_token_update_date,disabled FROM ats_user where username = %s", (username, ))
+        desc = self.cur.description
+        columns = [col[0] for col in desc]
+        row = self.cur.fetchall()
+        result = self.enrich_user_result(columns=columns, result_array=row)
+        return result
+
 
     def close_connection(self):
         print("Called MysqlDB.close_connection()")

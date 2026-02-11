@@ -12,6 +12,7 @@ list_of_files = [
     "research/__init__.py",
     "src/utils/__init__.py",
     "src/utils/common.py",
+    "src/security/__init__.py",
     "config/config.py",
     "main.py",
     "Dockerfile",

@@ -2,6 +2,8 @@ import logging
 import asyncio
 import streamlit as st
 from streamlit_extras.mention import mention
+from streamlit_extras.stylable_container import stylable_container
+# from streamlit_extras.bottom_container import bottom
 # from langgraph_backend import chatbot
 from langchain_core.messages import HumanMessage
 import uuid
@@ -16,7 +18,7 @@ if rag_app.rag_chain is None:
 chatHistoryHandler = ChatHistoryHandler()
 chatSessionListHandler = ChatSessionListHandler()
 
-st.session_state['user_id'] = "user11"
+# st.session_state['user_id'] = "user11"
 
 # -------------------- Thread management start --------------------
 def generate_thread_id():
@@ -48,7 +50,9 @@ def add_thread(thread_id):
 def load_all_sessions(username):
     st.session_state['chat_threads'] = []
     chat_sessions = chatSessionListHandler.retrive_chat(username)
+    logging.info("Loading sessions")
     for session in chat_sessions:
+        logging.info(session)
         st.session_state['chat_threads'].append(session["session_id"])
 
 # -------------------- Thread management end --------------------
@@ -62,30 +66,6 @@ if 'thread_id' not in st.session_state:
 
 if 'chat_threads' not in st.session_state:
     st.session_state['chat_threads'] = []
-
-# add_thread(st.session_state['thread_id'])
-load_all_sessions(st.session_state['user_id'])
-# -------------------- Session config end --------------------
-
-st.sidebar.title('RAG Chatbot')
-st.sidebar.header('My Sessions')
-
-if st.sidebar.button('New Chat'):
-    new_chat()
-
-# -------------------- Chat History --------------------
-# st.session_state -> dict ->
-# CONFIG = {'configurable': {'thread_id': 'thread-1'}}
-#
-# if 'message_history' not in st.session_state:
-#     st.session_state['message_history'] = []
-
-# loading the conversation history
-# for message in st.session_state['message_history']:
-#     with st.chat_message(message['role']):
-#         st.text(message['content'])
-
-# -------------------- Chat History --------------------
 
 ################ Load conversations ##################
 def load_conversation(username, session_id):
@@ -133,6 +113,42 @@ def show_ai_chat(ai_message):
         else:
             st.write(ai_message)
 
+def login_page():
+    # Define a placeholder for the login form
+    login_placeholder = st.empty()
+
+    # Check if the user is already logged in
+    if "logged_in" not in st.session_state:
+        st.session_state.logged_in = False
+
+    if not st.session_state.logged_in:
+        with login_placeholder.form("login_form"):
+            st.markdown("### Login")
+            username = st.text_input("Username")
+            password = st.text_input("Password", type="password")
+            submit_button = st.form_submit_button("Login")
+
+            if submit_button:
+                # response = asyncio.run(chatSessionListHandler.authenticate(username=username, password=password))
+                response = chatSessionListHandler.authenticate(username=username, password=password)
+                logging.info("Response - ")
+                logging.info(response)
+
+                if response is not None and response is not False:
+                    logging.info("Logging In")
+                    st.session_state.logged_in = True
+                    st.session_state.username = username
+                    st.session_state.token = response
+                    login_placeholder.empty()  # Clear the login form
+                    # st.success("Login successful!")
+                    logging.info("Setting cache done")
+                    st.toast("Login successful!", icon="✅")
+                    st.rerun()
+                else:
+                    logging.info("Failed to login")
+                    st.error("Login failed. Please check your username and password.")
+                    # st.toast("Login failed. Incorrect username or password.", icon="❌")
+
 # async def stream_response():
 #     logging.info("Starting stream_response()")
 #     selected_key = ""
@@ -168,85 +184,163 @@ def show_ai_chat(ai_message):
 #             #     yield chunk
 #         logging.info(
 #             chunk + " -> cleaned -> " + cleaned_chunk + " current_key -> " + current_key + " -> " + selected_key + " -> quotation_crawled -> " + str(quotation_crawled))
+# st.markdown("""
+# <style>
+# .fixed-bottom {
+#     position: fixed;
+#     bottom: 0;
+#     left: 0;
+#     width: 100%;
+#     background-color: white; /* Match your app background */
+#     padding: 10px;
+#     border-top: 1px solid #ddd; /* Optional: adds a line above the button */
+#     display: flex;
+#     justify-content: center; /* Center the button horizontally */
+#     align-items: center;
+#     z-index: 9999;
+# }
+# </style>
+# """, unsafe_allow_html=True)
 
-for thread_id in st.session_state['chat_threads'][::-1]:
-    if st.sidebar.button(str(thread_id), key=thread_id):
-        st.session_state['thread_id'] = thread_id
-        logging.info("session_id is set to", str(thread_id))
+# dummy_tab_1, dummy_tab_2, logout_tab = st.columns([1, 1, 0.2])
 
-        messages = load_conversation(username=st.session_state['user_id'], session_id=st.session_state['thread_id'])
+# with logout_tab:
+#     if ('logged_in' in st.session_state) and st.session_state.logged_in:
+#         if st.button("Logout", key="logout_button_small"):
+#             st.session_state.logged_in = False
+#             st.session_state.username = ""
+#             # st.experimental_rerun() # Rerun to show login page again
+#             st.rerun()
 
-        temp_messages = []
-        st.session_state['message_history'] = []
-        logging.info("Iterating over messages")
-        for msg in messages:
-            logging.info("MESSAGE")
-            logging.info(msg)
-            if isinstance(msg, HumanMessage):
-                role='user'
-                logging.info("MESSAGE - user")
-            else:
-                role='assistant'
-                logging.info("MESSAGE - assistant")
-            temp_messages.append({'role': msg["role"], 'content': msg["data"]})
-            # st.session_state['message_history'].append({'role': 'user', 'content': msg["data"]})
+if ('logged_in' not in st.session_state) or (('logged_in' in st.session_state) and (not st.session_state.logged_in)):
+    login_page()
 
-        st.session_state['message_history'] = temp_messages
+if ('logged_in' in st.session_state) and st.session_state.logged_in:
+    # add_thread(st.session_state['thread_id'])
+    load_all_sessions(st.session_state['username'])
+    # -------------------- Session config end --------------------
 
-################ Load conversations ##################
-logging.info("Loading conversations, .............")
-for msg in st.session_state['message_history']:
-    if msg["role"] == "user":
+    with st.sidebar:
+        # st.sidebar.title('RAG Chatbot')
+        # st.sidebar.header('My Sessions')
+        #
+        # if st.sidebar.button('New Chat'):
+        #     new_chat()
+        st.title('RAG Chatbot')
+        st.header('My Sessions')
+
+        if st.button('New Chat'):
+            new_chat()
+
+    # -------------------- Chat History --------------------
+    # st.session_state -> dict ->
+    # CONFIG = {'configurable': {'thread_id': 'thread-1'}}
+    #
+    # if 'message_history' not in st.session_state:
+    #     st.session_state['message_history'] = []
+
+    # loading the conversation history
+    # for message in st.session_state['message_history']:
+    #     with st.chat_message(message['role']):
+    #         st.text(message['content'])
+
+    # -------------------- Chat History --------------------
+
+        for thread_id in st.session_state['chat_threads'][::-1]:
+            if st.button(str(thread_id), key=thread_id):
+                st.session_state['thread_id'] = thread_id
+                logging.info("session_id is set to", str(thread_id))
+
+                messages = load_conversation(username=st.session_state['username'], session_id=st.session_state['thread_id'])
+
+                temp_messages = []
+                st.session_state['message_history'] = []
+                logging.info("Iterating over messages")
+                for msg in messages:
+                    logging.info("MESSAGE")
+                    logging.info(msg)
+                    if isinstance(msg, HumanMessage):
+                        role='user'
+                        logging.info("MESSAGE - user")
+                    else:
+                        role='assistant'
+                        logging.info("MESSAGE - assistant")
+                    temp_messages.append({'role': msg["role"], 'content': msg["data"]})
+                    # st.session_state['message_history'].append({'role': 'user', 'content': msg["data"]})
+
+                st.session_state['message_history'] = temp_messages
+
+        if ('logged_in' in st.session_state) and st.session_state.logged_in:
+            with stylable_container(
+                    "green",
+                    css_styles="""
+                button {
+                    background-color: #cc6c6c;
+                    color: black;
+                }""",
+            ):
+                # button1_clicked = st.button("Logout", key="button1")
+                if st.button("Logout", key="button1"):
+                    st.session_state.logged_in = False
+                    st.session_state.username = ""
+                    # st.experimental_rerun() # Rerun to show login page again
+                    st.rerun()
+
+
+    ################ Load conversations ##################
+    logging.info("Loading conversations, .............")
+    for msg in st.session_state['message_history']:
+        if msg["role"] == "user":
+            with st.chat_message("user", avatar="🧑‍💻"):
+                st.write(msg["content"])
+        else:
+            # with st.chat_message("assistant", avatar="🤖"):
+            #     st.write(msg["content"])
+            show_ai_chat(msg)
+
+    user_input = st.chat_input('Type here')
+
+    if user_input:
+
+        st.session_state['message_history'].append({'role': 'user', 'content': user_input})
         with st.chat_message("user", avatar="🧑‍💻"):
-            st.write(msg["content"])
-    else:
+            st.write(user_input)
+
+        ## ------- Insert user message ---------
+        now = datetime.now()
+        time_string = now.strftime("%Y-%m-%dT%H:%M:%S")
+        chatHistoryHandler.insert_chat_record(message = user_input,
+                                              username = st.session_state['username'],
+                                              session_id = str(st.session_state['thread_id']),
+                                              timestamp = time_string,
+                                              role = "user")
+        chat_history = format_chat_history() # Modify this
+        ai_message = rag_app.answer_question(user_input, chat_history)
+
+        # first add the message to message_history
+        # st.session_state['message_history'].append({'role': 'assistant', 'content': ai_message})
         # with st.chat_message("assistant", avatar="🤖"):
-        #     st.write(msg["content"])
-        show_ai_chat(msg)
-
-user_input = st.chat_input('Type here')
-
-if user_input:
-
-    st.session_state['message_history'].append({'role': 'user', 'content': user_input})
-    with st.chat_message("user", avatar="🧑‍💻"):
-        st.write(user_input)
-
-    ## ------- Insert user message ---------
-    now = datetime.now()
-    time_string = now.strftime("%Y-%m-%dT%H:%M:%S")
-    chatHistoryHandler.insert_chat_record(message = user_input,
-                                          username = st.session_state['user_id'],
-                                          session_id = str(st.session_state['thread_id']),
-                                          timestamp = time_string,
-                                          role = "user")
-    chat_history = format_chat_history() # Modify this
-    ai_message = rag_app.answer_question(user_input, chat_history)
-
-    # first add the message to message_history
-    # st.session_state['message_history'].append({'role': 'assistant', 'content': ai_message})
-    # with st.chat_message("assistant", avatar="🤖"):
-    #     st.write(ai_message)
-    show_ai_chat({"content": ai_message})
-    # full_response = st.write_stream(rag_app.answer_question(user_input, chat_history))
-    # placeholder = st.empty()
-    #--------------------
-    # with st.chat_message("user", avatar="🧑‍💻"):
-    #     st.write_stream(stream_response())
-    # full_response = st.write_stream(rag_app.answer_question(user_input, ""))
-    # logging.info("Printing the full response")
-    # for message in full_response:
-    #     logging.info(message)
-    # --------------------
-    # full_response.clear()
-    # if st.button("Clear Output"):
-    #     placeholder.empty()
-    # st.session_state['message_history'].append({'role': 'assistant', 'content': full_response})
-    ## ------- Insert assistant message ---------
-    now = datetime.now()
-    time_string = now.strftime("%Y-%m-%dT%H:%M:%S")
-    chatHistoryHandler.insert_chat_record(message=ai_message,
-                                          username=st.session_state['user_id'],
-                                          session_id=str(st.session_state['thread_id']),
-                                          timestamp=time_string,
-                                          role="assistant")
+        #     st.write(ai_message)
+        show_ai_chat({"content": ai_message})
+        # full_response = st.write_stream(rag_app.answer_question(user_input, chat_history))
+        # placeholder = st.empty()
+        #--------------------
+        # with st.chat_message("user", avatar="🧑‍💻"):
+        #     st.write_stream(stream_response())
+        # full_response = st.write_stream(rag_app.answer_question(user_input, ""))
+        # logging.info("Printing the full response")
+        # for message in full_response:
+        #     logging.info(message)
+        # --------------------
+        # full_response.clear()
+        # if st.button("Clear Output"):
+        #     placeholder.empty()
+        # st.session_state['message_history'].append({'role': 'assistant', 'content': full_response})
+        ## ------- Insert assistant message ---------
+        now = datetime.now()
+        time_string = now.strftime("%Y-%m-%dT%H:%M:%S")
+        chatHistoryHandler.insert_chat_record(message=ai_message,
+                                              username=st.session_state['username'],
+                                              session_id=str(st.session_state['thread_id']),
+                                              timestamp=time_string,
+                                              role="assistant")

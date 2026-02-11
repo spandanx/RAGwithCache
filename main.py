@@ -39,11 +39,14 @@ from psycopg import Connection
 
 import redis
 import time
+import mysql.connector
+import datetime
 
 import os
 from dotenv import load_dotenv
 
-from src.components.ChatHistory.ChatSessionDB import ChatSessionMySQL
+from src.security.Auth import authenticate_user, create_access_token
+from src.components.ChatHistory.ChatSessionDB import MySQLDB
 from src.components.ChatHistory.ChatHistoryDB import ChatHistoryDB
 
 load_dotenv()
@@ -503,7 +506,7 @@ class ChatHistoryHandler:
 
 class ChatSessionListHandler:
     def __init__(self):
-        self.chatSessionMySQL = ChatSessionMySQL(host = parser["MYSQL"]["mysql_hostname"],
+        self.chatSessionMySQL = MySQLDB(host = parser["MYSQL"]["mysql_hostname"],
                                         port = parser["MYSQL"]["mysql_port"],
                                         username = parser["MYSQL"]["mysql_username"],
                                         password = parser["MYSQL"]["mysql_password"],
@@ -511,7 +514,7 @@ class ChatSessionListHandler:
                                         )
 
     def retrive_chat(self, username):
-        results = self.chatSessionMySQL.get_user_by_username(username=username)
+        results = self.chatSessionMySQL.get_chat_sessions_by_username(username=username)
         return results
 
     def insert_chat_record(self, session_id, username, description, timestamp):
@@ -521,6 +524,30 @@ class ChatSessionListHandler:
             description = description,
             timestamp = timestamp
         )
+
+    '''
+    Authenticate user
+    '''
+    def authenticate(self, username, password):
+        response = authenticate_user(username, password, self.chatSessionMySQL)
+        if response:
+            logging.info("main - authenticate()")
+            logging.info(response)
+            data = {"sub": username}
+            token = create_access_token(data, parser['ENCRYPTION']['SECRET_KEY'], parser['ENCRYPTION']['ALGORITHM'],
+                                        int(parser['ENCRYPTION']['ACCESS_TOKEN_EXPIRE_MINUTES']))
+            return token
+        return response
+
+    def update_stock_token_controller(self, token, username):
+        logging.info("Calling update_stock_token_controller()")
+        logging.info(token)
+        current_time = datetime.today().strftime('%Y-%m-%d %H:%M:%S')
+        self.chatSessionMySQL.update_stock_token(token, current_time, username)
+        return {"message": "Successfully Updated the stock token"}
+
+    def get_stock_token_controller(self, username):
+        return self.chatSessionMySQL.get_basic_user_info(username)
 
 
 async def query_data():
@@ -596,6 +623,11 @@ if __name__ == "__main__":
     docs_path = "https://en.wikipedia.org/wiki/Northeast_India"
 
     rag_app = RAGApplication()
+    chatSessionListHandler = ChatSessionListHandler()
+    # username = "us"
+    # password = "ps"
+    # response = chatSessionListHandler.authenticate(username, password)
+    x = 1
     #
     # rag_app.ingest_data(docs_path)
     # rag_app.load_store()
@@ -608,7 +640,12 @@ if __name__ == "__main__":
     # }
     # asyncio.run(config_pg_checkpointer())
     # asyncio.run(config_pg_store())
-    test_load_pg_store()
+    # test_load_pg_store()
+
+    # username = "us"
+    # password = "ps"
+    # chatSessionListHandler.authenticate(username=username, password=password)
+
     # logging.info("About to connect")
     # pool = Connection.connect(pg_url)
     # logging.info("Connected")
