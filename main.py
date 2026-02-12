@@ -9,7 +9,7 @@ from langchain_community.document_loaders import WebBaseLoader
 from langchain_core.documents import Document
 from langchain_core.messages import BaseMessage
 from langchain_core.output_parsers import PydanticOutputParser, JsonOutputParser
-from langchain_core.prompts import PromptTemplate
+from langchain_core.prompts import PromptTemplate, ChatPromptTemplate
 from langchain_core.runnables import RunnableConfig
 from langchain_openai import ChatOpenAI, OpenAIEmbeddings
 from langchain_google_genai import ChatGoogleGenerativeAI
@@ -125,7 +125,7 @@ class VectorStore:
 
 class RAGGraphState(TypedDict):
     messages: Annotated[Sequence[BaseMessage], add_messages]
-    relevant_feedback_counter: int
+    internal_raw_documents: list
     internal_retrieved_documents: str
     generated_summary: str
     query: str
@@ -250,31 +250,84 @@ class RAGRetriever:
         # )
         return state
 
-    def retrieve_documents_from_vector_db(self, state: RAGGraphState, store) -> Command[Literal["generate"]]:
-        # reranked_docs = self.reranker_retriever.invoke({"query": query})
-        # return reranked_docs
+    # def retrieve_documents_from_vector_db(self, state: RAGGraphState, store) -> Command[Literal["generate"]]:
+    #     logging.info("retrieving related documents, query: " + state["query"])
+    #     retriever = self.vector_store.as_retriever()
+    #     docs = retriever.invoke(state["query"])
+    #     context =  "\n\n".join(["Content: " + doc.page_content + "\n Source: " + doc.metadata["source"] for doc in docs])
+    #
+    #     return Command(
+    #         goto="generate",
+    #         update={
+    #             "internal_retrieved_documents": context,
+    #         }
+    #     )
+
+    def retrieve_documents_from_vector_db(self, state: RAGGraphState, store) -> Command[Literal["rate_document_extraction"]]:
         logging.info("retrieving related documents, query: " + state["query"])
         retriever = self.vector_store.as_retriever()
         docs = retriever.invoke(state["query"])
-        # state["docs"] = docs
-        # return state
-        # logging.info("Iterating over fetched documents")
-        # for doc in docs:
-        #     logging.info(doc)
-        #     logging.info(doc.page_content)
-        #     logging.info(doc.metadata)
-        #     logging.info(doc.metadata["source"])
-        context =  "\n\n".join(["Content: " + doc.page_content + "\n Source: " + doc.metadata["source"] for doc in docs])
+        # context =  "\n\n".join(["Content: " + doc.page_content + "\n Source: " + doc.metadata["source"] for doc in docs])
 
-        # logging.info("retrieving done, query: " + state["query"])
-        # logging.info("CONTEXT:")
-        # logging.info(context)
+        return Command(
+            goto="rate_document_extraction",
+            update={
+                "internal_raw_documents": docs,
+            }
+        )
+
+    def rate_document_extraction(self, state: RAGGraphState, store) -> Command[Literal["generate"]]:
+        # reranked_docs = self.reranker_retriever.invoke({"query": query})
+        # return reranked_docs
+        prompt_template = (
+        "You are a context relevance checker."
+        "You will be given a question and chunk retrieved."
+        "You need to return a relevance score between them in a range of 0 to 1 and short reason behind the relevance"
+        "Return a JSON response and follow the below response format for output."
+        "{format_instructions}"
+        "Question: {question}"
+        "Chunk: {chunk}"
+        )
+
+        class RelevanceScore(BaseModel):
+            score: float
+            reason: str
+
+        outputParser = PydanticOutputParser(pydantic_object=RelevanceScore)
+
+        prompt = PromptTemplate(template=prompt_template,
+                                input_variables=["question", "chunk"],
+                                partial_variables={"format_instructions": outputParser.get_format_instructions()}
+                                )
+        # prompt = PromptTemplate.from
+
+        docs = state["internal_raw_documents"]
+
+        chain = prompt | self.llm | outputParser
+
+        relevant_docs = []
+        relevant_doc_flag = False
+        for doc in docs:
+            output = chain.invoke({"question": state["query"],
+                                   "chunk": doc.page_content
+                                   })
+            logging.info("Comparing")
+            logging.info(state["query"])
+            logging.info(doc.page_content)
+            logging.info(output)
+            if output.score > 0.8:
+                relevant_doc_flag = True
+            if output.score>0.5:
+                relevant_docs.append(doc)
+
+        context = "\n\n".join(["Content: " + doc.page_content + "\n Source: " + doc.metadata["source"] for doc in relevant_docs])
+        # context = "\n\n".join(
+        #     ["Content: " + doc.page_content + "\n Source: " + doc.metadata["source"] for doc in docs])
 
         return Command(
             goto="generate",
             update={
-                "internal_retrieved_documents": context,
-                # "query": state["query"]
+                "internal_retrieved_documents": context
             }
         )
 
@@ -361,6 +414,7 @@ class RAGRetriever:
         graph.add_node("cache_checker", self.cache_checker)
         graph.add_node("extract_profile_info", self.extract_profile_info)
         graph.add_node("vector_retriever", self.retrieve_documents_from_vector_db)
+        graph.add_node("rate_document_extraction", self.rate_document_extraction)
         graph.add_node("generate", self.generate)
         graph.add_node("final_node", self.final_node)
         # graph.add_edge("vector_retriever", "generate")
@@ -623,7 +677,10 @@ if __name__ == "__main__":
     docs_path = "https://en.wikipedia.org/wiki/Northeast_India"
 
     rag_app = RAGApplication()
-    chatSessionListHandler = ChatSessionListHandler()
+    query = "Which is the highest peak in Northeast?"
+    answer = rag_app.answer_question(question=query, chat_history="")
+    # chatSessionListHandler = ChatSessionListHandler()
+    # RAGRetriever()
     # username = "us"
     # password = "ps"
     # response = chatSessionListHandler.authenticate(username, password)
