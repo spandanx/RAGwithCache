@@ -30,7 +30,7 @@ from qdrant_client.http.models import Distance, VectorParams
 from langchain.retrievers.document_compressors import CrossEncoderReranker
 from langchain_community.cross_encoders import HuggingFaceCrossEncoder
 
-from langgraph.types import Command
+from langgraph.types import Command, interrupt
 from typing_extensions import Literal
 
 from redisvl.extensions.cache.llm import SemanticCache
@@ -173,7 +173,8 @@ class RAGRetriever:
         query_embedding = self.embed_query(query_text)
 
         # Check cache first
-        cached_result = self.llmcache.check(vector=query_embedding)
+        # cached_result = self.llmcache.check(vector=query_embedding)
+        cached_result = None
 
         if cached_result:
             # Cache hit - return immediately
@@ -335,13 +336,21 @@ class RAGRetriever:
 
     def web_search(self, state: RAGGraphState, store) -> Command[Literal["generate"]]:
 
-        web_search_tool = TavilySearchResults(max_search_results = 3)
+        human_response = interrupt({
+            "message": "About to search the web for results, would you like to continue?",
+            "options": ["YES", "NO"]
+        })
 
-        results = web_search_tool.invoke({"query": state["query"]})
+        logging.info(human_response)
 
-        updated_relevant_docs = state["relevant_documents"] + results
+        web_search_tool = TavilySearchResults(max_results = 3)
 
-        goto = ""
+        web_results = web_search_tool.invoke({"query": state["query"]})
+        refined_results = [{"page_content": doc["content"], "metadata": {"source": doc["url"]}} for doc in web_results]
+
+        updated_relevant_docs = state["relevant_documents"] + refined_results
+
+        goto = "generate"
         return Command(
             goto = goto,
             update={
@@ -379,7 +388,7 @@ class RAGRetriever:
             partial_variables={"format_instruction": parser.get_format_instructions()}
         )
         docs = state["relevant_documents"]
-        context =  "\n\n".join(["Content: " + doc.page_content + "\n Source: " + doc.metadata["source"] for doc in docs])
+        context =  "\n\n".join(["Content: " + doc["page_content"] + "\n Source: " + doc["metadata"]["source"] for doc in docs])
 
         chain = prompt | self.llm | parser
         response = chain.invoke({"question":state["query"],
@@ -405,12 +414,6 @@ class RAGRetriever:
 
     def final_node(self, state: RAGGraphState, store) -> Command[Literal[END]]:
 
-        # logging.info("Called final_node()")
-        # logging.info(state["final_response"])
-        # logging.info(type(state["final_response"]))
-        # logging.info(state["final_response"]["answer"])
-        # logging.info(type(state["final_response"]["answer"]))
-
         if not state["is_cached"]:
             self.llmcache.store(
                 prompt=state["query"],
@@ -435,6 +438,7 @@ class RAGRetriever:
         graph.add_node("extract_profile_info", self.extract_profile_info)
         graph.add_node("vector_retriever", self.retrieve_documents_from_vector_db)
         graph.add_node("rate_document_extraction", self.rate_document_extraction)
+        graph.add_node("web_search", self.web_search)
         graph.add_node("generate", self.generate)
         graph.add_node("final_node", self.final_node)
         # graph.add_edge("vector_retriever", "generate")
@@ -477,7 +481,7 @@ class RAGRetriever:
 
         graph = self.graph.compile(checkpointer=checkpointer, store = store)
         config = {"configurable": {"thread_id": "2", "user_id": "user_123"}}
-        response = graph.invoke({"query": query, "chat_history": chat_history}, config)
+        response = graph.invoke({"query": query, "chat_history": chat_history}, config, )
         return response["final_response"]
         # return self.graph.astream_events(input={"query": query, "chat_history": chat_history}, version="v2")
 
@@ -697,7 +701,7 @@ if __name__ == "__main__":
     docs_path = "https://en.wikipedia.org/wiki/Northeast_India"
 
     rag_app = RAGApplication()
-    query = "Which is the highest peak in Northeast?"
+    query = "What was the cricket score in india vs Namibia?"
     answer = rag_app.answer_question(question=query, chat_history="")
     # chatSessionListHandler = ChatSessionListHandler()
     # RAGRetriever()
