@@ -19,14 +19,13 @@ from langchain_qdrant import QdrantVectorStore
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langgraph.checkpoint.postgres import PostgresSaver
 from langgraph.store.postgres import PostgresStore
-from langgraph.store.base import BaseStore
+# from langgraph.store.base import BaseStore
 
 from langgraph.graph import StateGraph, add_messages, END
 from pydantic import BaseModel
 from pydantic.v1 import Field
 from qdrant_client import QdrantClient
 from qdrant_client.http.models import Distance, VectorParams
-from langchain.retrievers import ContextualCompressionRetriever
 
 from langchain.retrievers.document_compressors import CrossEncoderReranker
 from langchain_community.cross_encoders import HuggingFaceCrossEncoder
@@ -36,10 +35,9 @@ from typing_extensions import Literal
 
 from redisvl.extensions.cache.llm import SemanticCache
 from psycopg import Connection
+from langchain_community.tools.tavily_search import TavilySearchResults
 
 import redis
-import time
-import mysql.connector
 import datetime
 
 import os
@@ -126,6 +124,7 @@ class VectorStore:
 class RAGGraphState(TypedDict):
     messages: Annotated[Sequence[BaseMessage], add_messages]
     internal_raw_documents: list
+    relevant_documents: list
     internal_retrieved_documents: str
     generated_summary: str
     query: str
@@ -276,7 +275,7 @@ class RAGRetriever:
             }
         )
 
-    def rate_document_extraction(self, state: RAGGraphState, store) -> Command[Literal["generate"]]:
+    def rate_document_extraction(self, state: RAGGraphState, store) -> Command[Literal["generate", "web_search"]]:
         # reranked_docs = self.reranker_retriever.invoke({"query": query})
         # return reranked_docs
         prompt_template = (
@@ -320,14 +319,33 @@ class RAGRetriever:
             if output.score>0.5:
                 relevant_docs.append(doc)
 
-        context = "\n\n".join(["Content: " + doc.page_content + "\n Source: " + doc.metadata["source"] for doc in relevant_docs])
+        # context = "\n\n".join(["Content: " + doc.page_content + "\n Source: " + doc.metadata["source"] for doc in relevant_docs])
         # context = "\n\n".join(
         #     ["Content: " + doc.page_content + "\n Source: " + doc.metadata["source"] for doc in docs])
-
+        if relevant_doc_flag:
+            goto = "generate"
+        else:
+            goto = "web_search"
         return Command(
-            goto="generate",
+            goto=goto,
             update={
-                "internal_retrieved_documents": context
+                "relevant_documents": relevant_docs
+            }
+        )
+
+    def web_search(self, state: RAGGraphState, store) -> Command[Literal["generate"]]:
+
+        web_search_tool = TavilySearchResults(max_search_results = 3)
+
+        results = web_search_tool.invoke({"query": state["query"]})
+
+        updated_relevant_docs = state["relevant_documents"] + results
+
+        goto = ""
+        return Command(
+            goto = goto,
+            update={
+                "relevant_documents": updated_relevant_docs
             }
         )
 
@@ -360,11 +378,13 @@ class RAGRetriever:
             input_variables=["chat_history", "question", "context"],
             partial_variables={"format_instruction": parser.get_format_instructions()}
         )
+        docs = state["relevant_documents"]
+        context =  "\n\n".join(["Content: " + doc.page_content + "\n Source: " + doc.metadata["source"] for doc in docs])
 
         chain = prompt | self.llm | parser
         response = chain.invoke({"question":state["query"],
                                  "chat_history":state["chat_history"],
-                                 "context":state["internal_retrieved_documents"]})
+                                 "context":context})
         # self.reranker_retriever = ContextualCompressionRetriever(
         #     base_compressor=compressor, base_retriever=retriever
         dict_response = response.model_dump()
