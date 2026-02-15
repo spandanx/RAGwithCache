@@ -11,6 +11,7 @@ import uuid
 from main import RAGApplication, ChatHistoryHandler, ChatSessionListHandler
 from datetime import datetime
 import re
+import time
 
 rag_app = RAGApplication()
 if rag_app.rag_chain is None:
@@ -296,6 +297,17 @@ if ('logged_in' in st.session_state) and st.session_state.logged_in:
             # with st.chat_message("assistant", avatar="🤖"):
             #     st.write(msg["content"])
             show_ai_chat(msg)
+
+    with st.status("Downloading data...", expanded=True) as status:
+        st.write("Searching for data...")
+        time.sleep(2)
+        st.write("Found URL.")
+        time.sleep(1)
+        st.write("Downloading data...")
+        time.sleep(1)
+        status.update(
+            label="Download complete!", state="complete", expanded=False
+        )
 
     if 'thread_id' in st.session_state and st.session_state['thread_id'] is not None:
         user_input = st.chat_input('Type here')

@@ -8,7 +8,7 @@ from langchain.chains.retrieval_qa.base import RetrievalQA
 from langchain_community.document_loaders import WebBaseLoader
 from langchain_core.documents import Document
 from langchain_core.messages import BaseMessage
-from langchain_core.output_parsers import PydanticOutputParser, JsonOutputParser
+from langchain_core.output_parsers import PydanticOutputParser, JsonOutputParser, StrOutputParser
 from langchain_core.prompts import PromptTemplate, ChatPromptTemplate
 from langchain_core.runnables import RunnableConfig
 from langchain_openai import ChatOpenAI, OpenAIEmbeddings
@@ -18,6 +18,7 @@ from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_qdrant import QdrantVectorStore
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langgraph.checkpoint.postgres import PostgresSaver
+from langgraph.store.memory import InMemoryStore
 from langgraph.store.postgres import PostgresStore
 # from langgraph.store.base import BaseStore
 
@@ -336,13 +337,6 @@ class RAGRetriever:
 
     def web_search(self, state: RAGGraphState, store) -> Command[Literal["generate"]]:
 
-        human_response = interrupt({
-            "message": "About to search the web for results, would you like to continue?",
-            "options": ["YES", "NO"]
-        })
-
-        logging.info(human_response)
-
         web_search_tool = TavilySearchResults(max_results = 3)
 
         web_results = web_search_tool.invoke({"query": state["query"]})
@@ -368,24 +362,33 @@ class RAGRetriever:
             "Question: {question} \n"
             "Context: {context}"
             
-            "return the link of the source as well in a LIST/Array of strings, do not return as string, it must be a list/Array, return empty list if not found"
-            "Follow the format instruction for the output {format_instruction}"
+            "Return the answer first and then the corresponding sources of the documents behind the answers in new lines" 
+            "Follow the format instruction for the output:"
+            "<ANSWER>"
+            "Sources: <source_1>"
+            "         ..  "
+            "         <source_n>"
         )
         # logging.info("Generating response, query: " + state["query"])
         # prompt = GENERATE_PROMPT.format(question=state["query"], chat_history=state["chat_history"],
         #                                 context=state["internal_retrieved_documents"])
         # response = self.llm.invoke([{"role": "user", "content": prompt}])
 
-        class ResponseFormat(BaseModel):
-            answer: str = Field(description="Answer of the question")
-            source: Optional[list[str]] = Field(description="List of sources of the retrieved data")
+        # class ResponseFormat(BaseModel):
+        #     answer: str = Field(description="Answer of the question")
+        #     source: Optional[list[str]] = Field(description="List of sources of the retrieved data")
 
-        parser = PydanticOutputParser(pydantic_object=ResponseFormat)
+        # parser = PydanticOutputParser(pydantic_object=ResponseFormat)
+        parser = StrOutputParser()
 
+        # prompt = PromptTemplate(
+        #     template=GENERATE_PROMPT,
+        #     input_variables=["chat_history", "question", "context"],
+        #     partial_variables={"format_instruction": parser.get_format_instructions()}
+        # )
         prompt = PromptTemplate(
             template=GENERATE_PROMPT,
-            input_variables=["chat_history", "question", "context"],
-            partial_variables={"format_instruction": parser.get_format_instructions()}
+            input_variables=["chat_history", "question", "context"]
         )
         docs = state["relevant_documents"]
         context =  "\n\n".join(["Content: " + doc["page_content"] + "\n Source: " + doc["metadata"]["source"] for doc in docs])
@@ -396,7 +399,7 @@ class RAGRetriever:
                                  "context":context})
         # self.reranker_retriever = ContextualCompressionRetriever(
         #     base_compressor=compressor, base_retriever=retriever
-        dict_response = response.model_dump()
+        # dict_response = response.model_dump()
         # )
         # logging.info("Generated response, query: " + state["query"])
         # logging.info("RESPONSE")
@@ -408,17 +411,22 @@ class RAGRetriever:
         return Command(
             goto="final_node",
             update={
-                "final_response": dict_response
+                "final_response": response
             }
         )
 
     def final_node(self, state: RAGGraphState, store) -> Command[Literal[END]]:
 
         if not state["is_cached"]:
+            # self.llmcache.store(
+            #     prompt=state["query"],
+            #     response=state["final_response"]["answer"],
+            #     metadata=state["final_response"],
+            #     vector=state["query_embedding"]
+            # )
             self.llmcache.store(
                 prompt=state["query"],
-                response=state["final_response"]["answer"],
-                metadata=state["final_response"],
+                response=state["final_response"],
                 vector=state["query_embedding"]
             )
             logging.info("Cached answer")
@@ -457,12 +465,8 @@ class RAGRetriever:
         # with PostgresSaver(pool) as checkpointer:
         return graph
 
-    def query(self, query, chat_history):
+    async def query(self, query, chat_history):
         # logging.info("STREAM DATA")
-        # async for event in self.graph.astream_events(input={"query": query, "chat_history": chat_history}, version="v2"):
-            # logging.info("Streaming... -> ")
-            # logging.info(event)
-            # yield event
         # logging.info("Query answer")
         # logging.info(response)
         pg_url = f"postgresql://{parser['POSTGRES']['username']}:{parser['POSTGRES']['password']}@{parser['POSTGRES']['hostname']}:{parser['POSTGRES']['port']}/{parser['POSTGRES']['database']}?sslmode=disable"
@@ -477,13 +481,21 @@ class RAGRetriever:
         # store.setup()
 
         checkpointer = PostgresSaver(conn)
+        # checkpointer = InMemoryStore()
         # checkpointer.setup()
 
-        graph = self.graph.compile(checkpointer=checkpointer, store = store)
+        # graph = self.graph.compile(checkpointer=checkpointer, store = store)
+        graph = self.graph.compile(store=store)
         config = {"configurable": {"thread_id": "2", "user_id": "user_123"}}
-        response = graph.invoke({"query": query, "chat_history": chat_history}, config, )
-        return response["final_response"]
-        # return self.graph.astream_events(input={"query": query, "chat_history": chat_history}, version="v2")
+        # response = graph.invoke({"query": query, "chat_history": chat_history}, config)
+        # return response["final_response"]
+
+        async for event in graph.astream_events(input={"query": query, "chat_history": chat_history}, config=config, version="v2"):
+        # async for event in graph.astream_events(input={"query": query, "chat_history": chat_history}, version="v2"):
+            logging.info("Streaming... -> ")
+            logging.info(event)
+            yield event
+        # return graph.astream_events(input={"query": query, "chat_history": chat_history}, config=config, version="v2")
 
 class RAGApplication:
     def __init__(self):
@@ -499,7 +511,6 @@ class RAGApplication:
 
     def ingest_data(self, docs_path: str):
         print("Ingesting documents...")
-
         if self.rag_chain is None:
             self.load_store()
 
@@ -519,7 +530,7 @@ class RAGApplication:
         logging.info("loaded vector store")
         self.rag_chain = RAGRetriever(vector_store=self.vector_manager.vector_store, pg_connection_pool = None)
 
-    def answer_question(self, question: str, chat_history: str) -> str:
+    async def answer_question(self, question: str, chat_history: str) -> str:
         # return self.rag_chain.query(question)
         if self.rag_chain is None:
             self.load_store()
@@ -527,12 +538,13 @@ class RAGApplication:
         # logging.info(async_response)
         # logging.info("Waited !!!!!!")
         #
-        response = self.rag_chain.query(question, chat_history)
-        return response
-        # async for event in self.rag_chain.query(question, chat_history):
-            # yield event
-            # logging.info("Steaming... *************")
-            # logging.info(event)
+        # response = self.rag_chain.query(question, chat_history)
+        # return response
+        logging.info("Steaming... *************")
+        async for event in self.rag_chain.query(question, chat_history):
+            logging.info(event)
+            yield event
+
             # if event["event"] == "on_chat_model_stream":
                 # filtered_event = {"event": event["event"],
                 #                   "name": event["name"],
@@ -628,10 +640,10 @@ class ChatSessionListHandler:
         return self.chatSessionMySQL.get_basic_user_info(username)
 
 
-async def query_data():
+async def query_data(query):
     # query = input("question - ")
     # query = "Which is the highest peak in Northeast?"
-    query = "Which is the highest peak in Northeast?"
+    # query = "Which is the highest peak in Northeast?"
     # query = "What is the longest river in Earth"
     # async_response =
     # logging.info(async_response)
@@ -732,7 +744,8 @@ if __name__ == "__main__":
     # logging.info("Connected")
     # checkpointer = PostgresSaver(pool)
     # checkpointer.setup()
-    # asyncio.run(query_data())
+    query = "What was the cricket score in india vs Namibia?"
+    asyncio.run(query_data(query))
     # while True:
     #     # query = input("question - ")
     #     query = "Which is the highest peak in Northeast?"
