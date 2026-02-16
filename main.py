@@ -7,7 +7,7 @@ from langchain.chains.llm import LLMChain
 from langchain.chains.retrieval_qa.base import RetrievalQA
 from langchain_community.document_loaders import WebBaseLoader
 from langchain_core.documents import Document
-from langchain_core.messages import BaseMessage
+from langchain_core.messages import BaseMessage, AIMessageChunk
 from langchain_core.output_parsers import PydanticOutputParser, JsonOutputParser, StrOutputParser
 from langchain_core.prompts import PromptTemplate, ChatPromptTemplate
 from langchain_core.runnables import RunnableConfig
@@ -174,14 +174,16 @@ class RAGRetriever:
         query_embedding = self.embed_query(query_text)
 
         # Check cache first
-        # cached_result = self.llmcache.check(vector=query_embedding)
-        cached_result = None
+        cached_result = self.llmcache.check(vector=query_embedding)
+        # cached_result = None
 
         if cached_result:
             # Cache hit - return immediately
             # print(f"Cache HIT - Response time: {elapsed:.2f}s")
             logging.info("Cache hit - query: " + query_text)
-            response = cached_result[0]['metadata']
+            # response = cached_result[0]['metadata']
+            response = cached_result
+            logging.info(cached_result)
             return Command(
                 goto='final_node',
                 update={
@@ -324,6 +326,7 @@ class RAGRetriever:
         # context = "\n\n".join(["Content: " + doc.page_content + "\n Source: " + doc.metadata["source"] for doc in relevant_docs])
         # context = "\n\n".join(
         #     ["Content: " + doc.page_content + "\n Source: " + doc.metadata["source"] for doc in docs])
+        refined_relevant_results = [{"page_content": doc.page_content, "metadata": {"source": doc.metadata["source"]}} for doc in relevant_docs]
         if relevant_doc_flag:
             goto = "generate"
         else:
@@ -331,7 +334,7 @@ class RAGRetriever:
         return Command(
             goto=goto,
             update={
-                "relevant_documents": relevant_docs
+                "relevant_documents": refined_relevant_results
             }
         )
 
@@ -365,6 +368,7 @@ class RAGRetriever:
             "Return the answer first and then the corresponding sources of the documents behind the answers in new lines" 
             "Follow the format instruction for the output:"
             "<ANSWER>"
+            "\n"
             "Sources: <source_1>"
             "         ..  "
             "         <source_n>"
@@ -391,7 +395,16 @@ class RAGRetriever:
             input_variables=["chat_history", "question", "context"]
         )
         docs = state["relevant_documents"]
-        context =  "\n\n".join(["Content: " + doc["page_content"] + "\n Source: " + doc["metadata"]["source"] for doc in docs])
+        # for doc in docs:
+        #     logging.info("DOCUMENT - ")
+        #     logging.info(doc)
+        #     logging.info(doc["page_content"])
+        #     logging.info(doc["metadata"]["source"])
+
+        # context =  "\n\n".join(["Content: " + doc.page_content + "\n Source: " + doc.metadata['source'] for doc in docs])
+        # refined_relevant_results = [{"page_content": doc.page_content, "metadata": {"source": doc.metadata["source"]}}
+        #                             for doc in relevant_docs]
+        context = "\n\n".join(["Content: " + doc["page_content"] + "\n Source: " + doc["metadata"]["source"] for doc in docs])
 
         chain = prompt | self.llm | parser
         response = chain.invoke({"question":state["query"],
@@ -492,8 +505,8 @@ class RAGRetriever:
 
         async for event in graph.astream_events(input={"query": query, "chat_history": chat_history}, config=config, version="v2"):
         # async for event in graph.astream_events(input={"query": query, "chat_history": chat_history}, version="v2"):
-            logging.info("Streaming... -> ")
-            logging.info(event)
+        #     logging.info("Streaming... -> ")
+        #     logging.info(event)
             yield event
         # return graph.astream_events(input={"query": query, "chat_history": chat_history}, config=config, version="v2")
 
@@ -531,38 +544,84 @@ class RAGApplication:
         self.rag_chain = RAGRetriever(vector_store=self.vector_manager.vector_store, pg_connection_pool = None)
 
     async def answer_question(self, question: str, chat_history: str) -> str:
-        # return self.rag_chain.query(question)
         if self.rag_chain is None:
             self.load_store()
-        # async_response = await
-        # logging.info(async_response)
-        # logging.info("Waited !!!!!!")
-        #
-        # response = self.rag_chain.query(question, chat_history)
-        # return response
-        logging.info("Steaming... *************")
         async for event in self.rag_chain.query(question, chat_history):
-            logging.info(event)
             yield event
 
+
+    async def stream_answer_question(self, question: str, chat_history: str) -> str:
+        if self.rag_chain is None:
+            self.load_store()
+        async for event in self.rag_chain.query(question, chat_history):
+            logging.info(event)
+            # if 'metadata' in event and 'langgraph_node' in event['metadata']:
+            if 'metadata' in event:
+                node_name = ""
+                if "langgraph_node" in event['metadata']:
+                    node_name = event['metadata']["langgraph_node"]
+
+                process_description = ""
+                if node_name == "cache_checker":
+                    process_description = "Checking Cache"
+                elif node_name == "extract_profile_info":
+                    process_description = "Extracting profile information"
+                elif node_name == "vector_retriever":
+                    process_description = "Retrieving from vector DB"
+                elif node_name == "rate_document_extraction":
+                    process_description = "Analysing extracted documents"
+                elif node_name == "web_search":
+                    process_description = "Searching over web"
+                elif node_name == "generate":
+                    process_description = "Generating response"
+                elif node_name == "final_node":
+                    process_description = "Finished Generation"
+
+                # if ("data" in event and "chunk" in event["data"]):
+                #     logging.info("Type")
+                #     logging.info(type(event["data"]["chunk"]))
+                #     logging.info(isinstance(event["data"]["chunk"], AIMessageChunk))
+                #     logging.info(isinstance(event["data"]["chunk"], dict))
+
+                content = ""
+                if ("data" in event and "chunk" in event["data"] and isinstance(event["data"]["chunk"], AIMessageChunk)):
+                    content = event["data"]["chunk"].content
+
+                is_cached = False
+                if ("data" in event and "output" in event["data"] and isinstance(event["data"]["output"], dict)):
+                    is_cached = event["data"]["output"].get("is_cached", False)
+
+                final_response = ""
+                if ("data" in event and "output" in event["data"] and isinstance(event["data"]["output"], dict) and "final_response" in event["data"]["output"] and isinstance(event["data"]["output"]["final_response"], list) and len(event["data"]["output"]["final_response"])>0):
+                    final_response = event['data']['output']['final_response'][-1].get('response')
+
+                filtered_event = {"event": event["event"],
+                                  "name": event["name"],
+                                  "content": content,
+                                  "node_name": node_name,
+                                  "process_description": process_description,
+                                  "is_cached":is_cached,
+                                  "final_response": final_response
+                                  }
+                yield filtered_event
             # if event["event"] == "on_chat_model_stream":
-                # filtered_event = {"event": event["event"],
-                #                   "name": event["name"],
-                #                   "data": event["data"],
-                #                   "content": event["data"]["chunk"].content
-                #                   }
-                # yield filtered_event
+            #     filtered_event = {"event": event["event"],
+            #                       "name": event["name"],
+            #                       "data": event["data"],
+            #                       "content": event["data"]["chunk"].content
+            #                       }
+            #     yield filtered_event
                 # yield event["data"]["chunk"].content
 
             # elif event["event"] == "on_chain_end" and ((isinstance(event["data"]["output"], dict) and event["data"]["output"].get("final_response") is not None)):
-                # filtered_event = {"event": event["event"],
-                #                   "data": {
-                #                       "output": {
-                #                                 "final_response": event["data"]["output"]["final_response"]
-                #                         } if (isinstance(event["data"]["output"], dict) and event["data"]["output"].get("final_response") is not None) else {}
-                #                   }
-                #                   }
-                # yield filtered_event
+            #     filtered_event = {"event": event["event"],
+            #                       "data": {
+            #                           "output": {
+            #                                     "final_response": event["data"]["output"]["final_response"]
+            #                             } if (isinstance(event["data"]["output"], dict) and event["data"]["output"].get("final_response") is not None) else {}
+            #                       }
+            #                       }
+            #     yield filtered_event
                 # yield event["data"]["output"]["final_response"]
         #
         # return async_response
@@ -647,10 +706,10 @@ async def query_data(query):
     # query = "What is the longest river in Earth"
     # async_response =
     # logging.info(async_response)
-    logging.info("Waited -----------")
-
-    async for event in rag_app.answer_question(question=query, chat_history=""):
-        logging.info("10101010---------")
+    logging.info("Steaming... -> -> -> -> ->")
+    # async for event in rag_app.answer_question(question=query, chat_history=""):
+    async for event in rag_app.stream_answer_question(question=query, chat_history=""):
+        # logging.info("10101010---------")
         logging.info(event)
 
     logging.info("Completed -----------")
@@ -714,7 +773,7 @@ if __name__ == "__main__":
 
     rag_app = RAGApplication()
     query = "What was the cricket score in india vs Namibia?"
-    answer = rag_app.answer_question(question=query, chat_history="")
+    # answer = rag_app.answer_question(question=query, chat_history="")
     # chatSessionListHandler = ChatSessionListHandler()
     # RAGRetriever()
     # username = "us"
@@ -744,7 +803,9 @@ if __name__ == "__main__":
     # logging.info("Connected")
     # checkpointer = PostgresSaver(pool)
     # checkpointer.setup()
-    query = "What was the cricket score in india vs Namibia?"
+    # query = "What was the cricket score in india vs Namibia?"
+    query = "Major mountains peaks in the North East?"
+    # query = "What are the major travelling destinations in North East?"
     asyncio.run(query_data(query))
     # while True:
     #     # query = input("question - ")

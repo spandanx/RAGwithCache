@@ -1,6 +1,7 @@
 import logging
 import asyncio
 import streamlit as st
+from streamlit_extras.avatar import avatar
 from streamlit_extras.mention import mention
 from streamlit_extras.stylable_container import stylable_container
 # from streamlit_extras.bottom_container import bottom
@@ -149,6 +150,76 @@ def login_page():
                     st.error("Login failed. Please check your username and password.")
                     # st.toast("Login failed. Incorrect username or password.", icon="❌")
 
+# async def stream_response_status(streaming_response):
+#     logging.info("Starting stream_response()")
+#     # async for chunk in rag_app.stream_answer_question(user_input, ""):
+#     with st.status("Generating...", expanded=True) as status:
+#         async for chunk in streaming_response:
+#             st.write(chunk["process_description"])
+#             if chunk["event"] == "on_chain_end" and chunk["langgraph_node"] == "final_node":
+#                 status.update(
+#                     label="Generation complete!", state="complete", expanded=False
+#                 )
+async def stream_response_status_chunk(streaming_response):
+    logging.info("Starting stream_response()")
+    last_process = ""
+    async for chunk in streaming_response:
+        if last_process != chunk["process_description"]:
+            last_process = chunk["process_description"]
+            yield chunk["process_description"]
+        # if chunk["event"] == "on_chain_end" and chunk["langgraph_node"] == "final_node":
+        #     status.update(
+        #         label="Generation complete!", state="complete", expanded=False
+        #     )
+
+async def stream_response(streaming_response):
+    logging.info("Starting stream_response()")
+    # async for chunk in rag_app.stream_answer_question(user_input, ""):
+    async for chunk in streaming_response:
+        logging.info(chunk)
+        if chunk["event"] == "on_chat_model_stream" and chunk["node_name"] == "generate":
+            yield chunk["content"]
+
+async def combine_streaming_data_status(streaming_response):
+    status = st.status("Generating...", expanded=True)
+    message = st.chat_message("assistant", avatar="🤖")
+    placeholder = message.empty()
+    # placeholder = st.empty()
+    answer = ""
+    last_process = ""
+    async for event in streaming_response:
+        logging.info("EVENT")
+        logging.info(event)
+        if last_process != event["process_description"] and event["process_description"]:
+            last_process = event["process_description"]
+            status.write("✔ " + event["process_description"])
+            status.update(label=event["process_description"] + "...", state="running")
+        if event["event"] == "on_chain_end" and event["node_name"] == "final_node":
+            status.update(
+                label="Generation complete!", state="complete", expanded=False
+            )
+        elif event["event"] == "on_chain_end" and event["is_cached"]:
+            status.update(
+                label="Generation complete!", state="complete", expanded=False
+            )
+
+        if event["event"] == "on_chat_model_stream" and event["node_name"] == "generate":
+            # message.write_stream(event["content"])
+            answer += event["content"]
+            placeholder.markdown(answer)
+            # message.markdown(event["content"])
+        elif event["event"] == "on_chain_end" and event["is_cached"]:
+            placeholder.markdown(event["final_response"])
+            answer = event["final_response"]
+
+    else:
+        return answer
+    # status.update(label="Done!", state="complete")
+    # async for chunk in streaming_response:
+        # if chunk["event"] == "on_chat_model_stream" and chunk["node_name"] == "generate":
+        #     yield chunk["content"]
+
+
 # async def stream_response():
 #     logging.info("Starting stream_response()")
 #     selected_key = ""
@@ -267,7 +338,7 @@ if ('logged_in' in st.session_state) and st.session_state.logged_in:
                         logging.info("MESSAGE - assistant")
                     temp_messages.append({'role': msg["role"], 'content': msg["data"]})
                     # st.session_state['message_history'].append({'role': 'user', 'content': msg["data"]})
-
+                temp_messages = temp_messages[::-1]
                 st.session_state['message_history'] = temp_messages
 
         if ('logged_in' in st.session_state) and st.session_state.logged_in:
@@ -294,20 +365,17 @@ if ('logged_in' in st.session_state) and st.session_state.logged_in:
             with st.chat_message("user", avatar="🧑‍💻"):
                 st.write(msg["content"])
         else:
-            # with st.chat_message("assistant", avatar="🤖"):
-            #     st.write(msg["content"])
-            show_ai_chat(msg)
+            with st.chat_message("assistant", avatar="🤖"):
+                st.write(msg["content"])
+            # show_ai_chat(msg)
 
-    with st.status("Downloading data...", expanded=True) as status:
-        st.write("Searching for data...")
-        time.sleep(2)
-        st.write("Found URL.")
-        time.sleep(1)
-        st.write("Downloading data...")
-        time.sleep(1)
-        status.update(
-            label="Download complete!", state="complete", expanded=False
-        )
+    # with st.status("Downloading data...", expanded=True) as status:
+    #     for msg in ["Searching for data...", "Found URL.", "Downloading data..."]:
+    #         st.write(msg)
+    #         time.sleep(2)
+        # status.update(
+        #     label="Download complete!", state="complete", expanded=False
+        # )
 
     if 'thread_id' in st.session_state and st.session_state['thread_id'] is not None:
         user_input = st.chat_input('Type here')
@@ -333,12 +401,36 @@ if ('logged_in' in st.session_state) and st.session_state.logged_in:
             # st.session_state['message_history'].append({'role': 'assistant', 'content': ai_message})
             # with st.chat_message("assistant", avatar="🤖"):
             #     st.write(ai_message)
-            show_ai_chat({"content": ai_message})
+
+            # show_ai_chat({"content": ai_message})
+
             # full_response = st.write_stream(rag_app.answer_question(user_input, chat_history))
             # placeholder = st.empty()
             #--------------------
+            streaming_response = rag_app.stream_answer_question(user_input, "")
+
+            # status = st.status("Generating...", expanded=True)
+            # for status in stream_response_status_chunk(streaming_response):
+            #     st.write(status)
+            #     status.update(label="Received chunk...", state="running")
+            # status.update(label="Done!", state="complete")
+
+            # with st.status("Generating...", expanded=True) as status:
+            #     status.update(
+            #         label=stream_response_status_chunk(streaming_response), state="running", expanded=False
+            #     )
+                # st.write(stream_response_status_chunk(streaming_response))
+                # st.write_stream(stream_response_status_chunk(streaming_response))
+
+            response = asyncio.run(combine_streaming_data_status(streaming_response))
+            # logging.info("END asyncio.run()")
+            # logging.info(response)
             # with st.chat_message("user", avatar="🧑‍💻"):
-            #     st.write_stream(stream_response())
+            #     response = st.write_stream(stream_response(streaming_response))
+            #     logging.info("STREAMED RESPONSE")
+            #     logging.info(response)
+
+
             # full_response = st.write_stream(rag_app.answer_question(user_input, ""))
             # logging.info("Printing the full response")
             # for message in full_response:
@@ -348,10 +440,11 @@ if ('logged_in' in st.session_state) and st.session_state.logged_in:
             # if st.button("Clear Output"):
             #     placeholder.empty()
             # st.session_state['message_history'].append({'role': 'assistant', 'content': full_response})
+
             ## ------- Insert assistant message ---------
             now = datetime.now()
             time_string = now.strftime("%Y-%m-%dT%H:%M:%S")
-            chatHistoryHandler.insert_chat_record(message=ai_message,
+            chatHistoryHandler.insert_chat_record(message=response,
                                                   username=st.session_state['username'],
                                                   session_id=str(st.session_state['thread_id']),
                                                   timestamp=time_string,
