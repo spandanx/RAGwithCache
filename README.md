@@ -27,7 +27,7 @@ Backend - `Python`, `LangGraph`, `Python`, `redis`, `MongoDB`, `MySQL`, `Postgre
 ## Steps to run locally
 
 ### Step 1. Clone the repositories
-#### Backend: https://github.com/spandanx/ResumeATS)](https://github.com/spandanx/RAGwithCache
+#### Backend: https://github.com/spandanx/RAGwithCache
 
 
 ### Step 2. Install required softwares
