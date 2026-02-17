@@ -775,28 +775,11 @@ if __name__ == "__main__":
     query = "What was the cricket score in india vs Namibia?"
     # answer = rag_app.answer_question(question=query, chat_history="")
     # chatSessionListHandler = ChatSessionListHandler()
-    # RAGRetriever()
-    # username = "us"
-    # password = "ps"
-    # response = chatSessionListHandler.authenticate(username, password)
     x = 1
     #
     # rag_app.ingest_data(docs_path)
     # rag_app.load_store()
-    #
-    # pg_url = f"postgresql://{parser['POSTGRES']['username']}:{parser['POSTGRES']['password']}@{parser['POSTGRES']['hostname']}:{parser['POSTGRES']['port']}/{parser['POSTGRES']['database']}?sslmode=disable"
-    # # logging.info(pg_url)
-    # memory_connection_kwargs = {
-    #     "autocommit": True,
-    #     "prepare_threshold": 0
-    # }
-    # asyncio.run(config_pg_checkpointer())
-    # asyncio.run(config_pg_store())
-    # test_load_pg_store()
 
-    # username = "us"
-    # password = "ps"
-    # chatSessionListHandler.authenticate(username=username, password=password)
 
     # logging.info("About to connect")
     # pool = Connection.connect(pg_url)
@@ -815,28 +798,6 @@ if __name__ == "__main__":
     #         break
         # answer = rag_app.answer_question(question=query, chat_history="")
         # logging.info("\nAnswer:", answer, "\n")
-
-    # embedding = OpenAIEmbeddings(dimensions=768, model="text-embedding-3-small")
-    #
-    # from redisvl.extensions.cache.llm import SemanticCache
-
-    # llmcache = SemanticCache(
-    #     name="llmcache",
-    #     vectorizer=hf,  # Your HuggingFace vectorizer
-    #     redis_url=REDIS_URL,
-    #     ttl=300,  # Cache entries expire after 5 minutes
-    #     distance_threshold=0.2,  # Similarity threshold
-    #     overwrite=True
-    # )
-    # redis_client = redis.Redis(host=parser['CACHE']['cache_url'], port=parser['CACHE']['cache_port'],
-    #                            db=parser['CACHE']['cache_db'], password=parser['CACHE']['cache_password'])
-    #
-    # llmcache = SemanticCache(
-    #     name="llmcache",  # The name of the search index in Redis
-    #     # redis_url="redis://103.180.212.180:6379",  # Connection URL for Redis
-    #     redis_client=redis_client,
-    #     distance_threshold=0.1  # Similarity threshold for cache matching
-    # )
 
     # def answer_question_with_cache(query_text):
     #     start_time = time.time()

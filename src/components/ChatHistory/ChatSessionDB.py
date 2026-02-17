@@ -155,10 +155,10 @@ if __name__ == "__main__":
     import uuid
     from datetime import datetime
     # response = chatSessionMySQL.insert_new_session(session_id=str(uuid.uuid4()),
-    #                                     username = 'user11',
+    #                                     username = 'user',
     #                                     description = '',
     #                                     timestamp = datetime.now()
     #                                     )
-    response = chatSessionMySQL.get_user_by_username('user11')
+    response = chatSessionMySQL.get_user_by_username('user')
     print(response)
 

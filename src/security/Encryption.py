@@ -31,7 +31,7 @@ class AESCipher(object):
 
 if __name__ == "__main__":
     key = "Key"
-    string_value = "pwd1111"
+    string_value = "pass"
     aESCipher = AESCipher(key)
     encrypted_text = aESCipher.encrypt(string_value)
     print("encrypted_text", encrypted_text)
