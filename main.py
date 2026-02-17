@@ -554,7 +554,7 @@ class RAGApplication:
         if self.rag_chain is None:
             self.load_store()
         async for event in self.rag_chain.query(question, chat_history):
-            logging.info(event)
+            # logging.info(event)
             # if 'metadata' in event and 'langgraph_node' in event['metadata']:
             if 'metadata' in event:
                 node_name = ""
