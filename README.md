@@ -6,6 +6,7 @@ This is a web application which uses RAG to extract information from pre-ingeste
  - Get answers from the already ingested wikipedia documents
  - Support of web search if documents are not available
  - Reduced LLM calls with semantic cache using redis
+ - Session management for different chat sessions
  - Implemented Corrective-RAG by rating context relevance with LLM
  - Added support for the questions beyond exisiting documents
  - Implemented long term memory and personalization with LangGraph and Postgres
