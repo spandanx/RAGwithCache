@@ -56,7 +56,7 @@ streamlit run ui.py
 The (.env) environment file should contain OPENAI_API_KEY and TAVILY_API_KEY
 
 ## Architecture
-### High Level Design Diagram
+### Functional Diagram
 ![FunctionalDiagram_FunctionalDiagram_RAG_CACHE](https://github.com/user-attachments/assets/404a8585-ea4d-4113-a7c5-ea957ce65956)
 
 ### LangGraph Node Diagram
