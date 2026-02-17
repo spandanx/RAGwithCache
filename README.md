@@ -12,12 +12,14 @@ This is a web application which uses RAG to extract information from pre-ingeste
  - Implemented long term memory and personalization with LangGraph and Postgres
 
 ## Application Snap Shots
-  <p>LoginPage</p>
+  <p>Login Page</p>
   <img src="https://github.com/user-attachments/assets/bea4ad28-2176-41c7-86e4-3ee5960a1c07" width=50% height=50%>
 
-  <p>ChatPage</p>
+  <p>Chat Page</p>
   <img src="https://github.com/user-attachments/assets/fbd7ff07-01e5-4f80-90ae-e7c90074034a" width=50% height=50%>
 
+  <p>Chat Streaming</p>
+  <video src="https://github.com/user-attachments/assets/ba9a28ae-7560-40e8-9e20-db0b73152e28" width=50% height=50%></video>
 	
 ## Technologies used
 
@@ -62,7 +64,5 @@ The (.env) environment file should contain OPENAI_API_KEY and TAVILY_API_KEY
 
 ### LangGraph Node Diagram
 ![LANGGRAPH_NODE_DIAGRAM](https://github.com/user-attachments/assets/3f992b86-f528-4082-80d0-687c2d02e5b0)
-
-## Youtube link
 
 
