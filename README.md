@@ -9,6 +9,7 @@ This is a web application which uses RAG to extract information from pre-ingeste
  - Session management for different chat sessions using MySQL and MongoDB
  - Implemented Corrective-RAG by rating context relevance with LLM
  - Implemented long term memory and personalization with LangGraph and Postgres
+ - Stream the answers from LangGraph and get realtime processing updates in the UI
 
 ## Application Snap Shots
   <p>Login Page</p>
