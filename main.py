@@ -789,7 +789,7 @@ if __name__ == "__main__":
     # query = "What was the cricket score in india vs Namibia?"
     query = "Major mountains peaks in the North East?"
     # query = "What are the major travelling destinations in North East?"
-    asyncio.run(query_data(query))
+    # asyncio.run(query_data(query))
     # while True:
     #     # query = input("question - ")
     #     query = "Which is the highest peak in Northeast?"

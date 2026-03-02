@@ -122,11 +122,16 @@ def login_page():
     if "logged_in" not in st.session_state:
         st.session_state.logged_in = False
 
+    if "failed_to_login" not in st.session_state:
+        st.session_state.failed_to_login = False
+
     if not st.session_state.logged_in:
         with login_placeholder.form("login_form"):
             st.markdown("### Login")
             username = st.text_input("Username")
             password = st.text_input("Password", type="password")
+            if "failed_to_login" in st.session_state and st.session_state.failed_to_login == True:
+                st.error("Login failed. Incorrect username or password.", icon="❌")
             submit_button = st.form_submit_button("Login")
 
             if submit_button:
@@ -144,11 +149,11 @@ def login_page():
                     # st.success("Login successful!")
                     logging.info("Setting cache done")
                     st.toast("Login successful!", icon="✅")
-                    st.rerun()
                 else:
                     logging.info("Failed to login")
-                    st.error("Login failed. Please check your username and password.")
+                    st.session_state.failed_to_login = True
                     # st.toast("Login failed. Incorrect username or password.", icon="❌")
+                st.rerun()
 
 # async def stream_response_status(streaming_response):
 #     logging.info("Starting stream_response()")

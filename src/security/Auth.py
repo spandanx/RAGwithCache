@@ -46,7 +46,8 @@ def create_access_token(data: dict, SECRET_KEY: str, ALGORITHM: str, expires_del
     logging.info(type(expires_delta))
     to_encode = data.copy()
     if expires_delta:
-        logging.info("expires_delta", expires_delta)
+        logging.info("expires_delta")
+        logging.info(expires_delta)
         expire = datetime.now(timezone.utc) + timedelta(minutes=expires_delta)
     else:
         logging.info("expires in ", 60, "minutes")
