@@ -3,13 +3,13 @@
 This is a web application which uses RAG to extract information from pre-ingested wikipedia documents.
 
 ## Features
- - Get answers from the already ingested wikipedia documents
- - Support of web search if documents are not available
+ - Get answers from the already ingested wikipedia documents in QDrant
+ - Support of web search using Tavily if related documents are not available
  - Reduced LLM calls with semantic cache using redis
- - Session management for different chat sessions
+ - Session management for different chat sessions using MySQL and MongoDB
  - Implemented Corrective-RAG by rating context relevance with LLM
- - Added support for the questions beyond exisiting documents
  - Implemented long term memory and personalization with LangGraph and Postgres
+ - Stream the answers from LangGraph and get realtime processing updates in the UI
 
 ## Application Snap Shots
   <p>Login Page</p>
@@ -79,3 +79,6 @@ The (.env) environment file should contain OPENAI_API_KEY and TAVILY_API_KEY
 <p>Store chat</p>
 
 ![SESSION_MANAGEMENT_STORE_CHAT](https://github.com/user-attachments/assets/67f7bcac-8671-45e8-a813-f8f19ae7888a)
+
+### Youtube link
+https://youtu.be/eFo-KTK-K-o
