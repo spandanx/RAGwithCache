@@ -79,3 +79,6 @@ The (.env) environment file should contain OPENAI_API_KEY and TAVILY_API_KEY
 <p>Store chat</p>
 
 ![SESSION_MANAGEMENT_STORE_CHAT](https://github.com/user-attachments/assets/67f7bcac-8671-45e8-a813-f8f19ae7888a)
+
+### Youtube link
+https://youtu.be/eFo-KTK-K-o
