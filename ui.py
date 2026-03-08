@@ -15,6 +15,13 @@ from datetime import datetime
 import re
 import time
 
+st.set_page_config(
+    page_title="Wiki-RAG",
+    page_icon="./config/RAG_IDOC_rounded.png",
+    layout="wide"
+)
+
+
 if 'rag_application' in st.session_state:
     logging.info("rag_application is present in session state")
     rag_app = st.session_state['rag_application']
