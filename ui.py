@@ -9,12 +9,20 @@ from streamlit_extras.stylable_container import stylable_container
 from langchain_core.messages import HumanMessage
 import uuid
 
-from main import RAGApplication, ChatHistoryHandler, ChatSessionListHandler
+from main import RAGApplication
+from src.components.ChatHistory.ChatSessionHandler import ChatSessionListHandler, ChatHistoryHandler
 from datetime import datetime
 import re
 import time
 
-rag_app = RAGApplication()
+if 'rag_application' in st.session_state:
+    logging.info("rag_application is present in session state")
+    rag_app = st.session_state['rag_application']
+else:
+    logging.info("rag_application is not present in session state, initializing RAGApplication()")
+    rag_app = RAGApplication()
+    st.session_state['rag_application'] = rag_app
+
 if rag_app.rag_chain is None:
     rag_app.load_store()
 chatHistoryHandler = ChatHistoryHandler()
@@ -116,6 +124,7 @@ def show_ai_chat(ai_message):
 
 def login_page():
     # Define a placeholder for the login form
+    logging.info("Called login_page()")
     login_placeholder = st.empty()
 
     # Check if the user is already logged in
@@ -154,6 +163,7 @@ def login_page():
                     st.session_state.failed_to_login = True
                     # st.toast("Login failed. Incorrect username or password.", icon="❌")
                 st.rerun()
+    logging.info("End login_page()")
 
 # async def stream_response_status(streaming_response):
 #     logging.info("Starting stream_response()")
@@ -193,8 +203,8 @@ async def combine_streaming_data_status(streaming_response):
     answer = ""
     last_process = ""
     async for event in streaming_response:
-        logging.info("EVENT")
-        logging.info(event)
+        # logging.info("EVENT")
+        # logging.info(event)
         if last_process != event["process_description"] and event["process_description"]:
             last_process = event["process_description"]
             status.write("✔ " + event["process_description"])
@@ -325,7 +335,7 @@ if ('logged_in' in st.session_state) and st.session_state.logged_in:
         for thread_id in st.session_state['chat_threads'][::-1]:
             if st.button(str(thread_id), key=thread_id):
                 st.session_state['thread_id'] = thread_id
-                logging.info("session_id is set to", str(thread_id))
+                logging.info("session_id is set to" + str(thread_id))
 
                 messages = load_conversation(username=st.session_state['username'], session_id=st.session_state['thread_id'])
 
@@ -400,7 +410,7 @@ if ('logged_in' in st.session_state) and st.session_state.logged_in:
                                                   timestamp = time_string,
                                                   role = "user")
             chat_history = format_chat_history() # Modify this
-            ai_message = rag_app.answer_question(user_input, chat_history)
+            # ai_message = rag_app.answer_question(user_input, chat_history)
 
             # first add the message to message_history
             # st.session_state['message_history'].append({'role': 'assistant', 'content': ai_message})
@@ -412,7 +422,7 @@ if ('logged_in' in st.session_state) and st.session_state.logged_in:
             # full_response = st.write_stream(rag_app.answer_question(user_input, chat_history))
             # placeholder = st.empty()
             #--------------------
-            streaming_response = rag_app.stream_answer_question(user_input, "")
+            streaming_response = rag_app.stream_answer_question(user_input, chat_history)
 
             # status = st.status("Generating...", expanded=True)
             # for status in stream_response_status_chunk(streaming_response):
@@ -428,8 +438,9 @@ if ('logged_in' in st.session_state) and st.session_state.logged_in:
                 # st.write_stream(stream_response_status_chunk(streaming_response))
 
             response = asyncio.run(combine_streaming_data_status(streaming_response))
-            # logging.info("END asyncio.run()")
-            # logging.info(response)
+            logging.info("END asyncio.run()")
+            logging.info(response)
+            st.session_state['message_history'].append({'role': 'assistant', 'content': response})
             # with st.chat_message("user", avatar="🧑‍💻"):
             #     response = st.write_stream(stream_response(streaming_response))
             #     logging.info("STREAMED RESPONSE")

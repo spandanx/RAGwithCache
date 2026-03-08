@@ -5,8 +5,7 @@ import logging
 
 from langchain.chains.llm import LLMChain
 from langchain.chains.retrieval_qa.base import RetrievalQA
-from langchain_community.document_loaders import WebBaseLoader
-from langchain_core.documents import Document
+
 from langchain_core.messages import BaseMessage, AIMessageChunk
 from langchain_core.output_parsers import PydanticOutputParser, JsonOutputParser, StrOutputParser
 from langchain_core.prompts import PromptTemplate, ChatPromptTemplate
@@ -15,8 +14,7 @@ from langchain_openai import ChatOpenAI, OpenAIEmbeddings
 from langchain_google_genai import ChatGoogleGenerativeAI
 
 # from langchain_community.vectorstores import Qdrant
-from langchain_qdrant import QdrantVectorStore
-from langchain_text_splitters import RecursiveCharacterTextSplitter
+
 from langgraph.checkpoint.postgres import PostgresSaver
 from langgraph.store.memory import InMemoryStore
 from langgraph.store.postgres import PostgresStore
@@ -25,8 +23,6 @@ from langgraph.store.postgres import PostgresStore
 from langgraph.graph import StateGraph, add_messages, END
 from pydantic import BaseModel
 from pydantic.v1 import Field
-from qdrant_client import QdrantClient
-from qdrant_client.http.models import Distance, VectorParams
 
 from langchain.retrievers.document_compressors import CrossEncoderReranker
 from langchain_community.cross_encoders import HuggingFaceCrossEncoder
@@ -38,15 +34,13 @@ from redisvl.extensions.cache.llm import SemanticCache
 from psycopg import Connection
 from langchain_community.tools.tavily_search import TavilySearchResults
 
+from src.components.VectorStore.VectorStoreHandler import VectorStore, DocumentLoader
+
 import redis
 import datetime
 
 import os
 from dotenv import load_dotenv
-
-from src.security.Auth import authenticate_user, create_access_token
-from src.components.ChatHistory.ChatSessionDB import MySQLDB
-from src.components.ChatHistory.ChatHistoryDB import ChatHistoryDB
 
 load_dotenv()
 os.environ["OPENAI_API_KEY"]=os.getenv("OPENAI_API_KEY")
@@ -69,58 +63,6 @@ namespace_for_memory = (user_id, "memories")
 #parser['CACHE']['cache_key']
 
 # from qdrant_client.http.models import Distance
-
-
-class DocumentLoader:
-    def __init__(self, url):
-        self.url = url
-
-    def document_reader(self) -> List[Document]:
-        loader = WebBaseLoader(self.url)
-        docs = loader.load()
-        return docs
-
-    def split_documents(self, documents):
-        splitter = RecursiveCharacterTextSplitter(chunk_size = 500, chunk_overlap = 50)
-        return splitter.split_documents(documents)
-
-class VectorStore:
-    def __init__(self, embedding_model, collection_name, qdrant_url, qdrant_key, vector_dimension):
-        self.embedding_model = embedding_model
-        # self.vector_db_client = QdrantClient(":memory:")
-        self.vector_db_client = QdrantClient(
-                url = qdrant_url,
-                api_key = qdrant_key
-            )
-        self.vector_store = None
-        self.collection_name = collection_name
-        self.vector_dimension = vector_dimension
-
-    def create_vectorstore(self):
-        # self.vector_db_client = QdrantClient(":memory:")
-        self.vector_db_client.create_collection(
-            collection_name=self.collection_name,
-            vectors_config=VectorParams(size=self.vector_dimension, distance=Distance.COSINE),
-        )
-
-    def load_vector_store(self):
-        self.vector_store = QdrantVectorStore(
-            client=self.vector_db_client,
-            collection_name=self.collection_name,
-            embedding=self.embedding_model,
-        )
-        # self.vector_store.sim
-        # vectorstore.similarity_search_with_score(query, k=k)
-
-
-    def ingest_data(self, documents):
-        self.vector_store.add_documents(documents)
-
-    def check_if_collection_exists(self):
-        return self.vector_db_client.collection_exists(self.collection_name)
-
-    def get_retriever(self):
-        return self.vector_store.as_retriever(search_type = "similarity", search_kwargs = {"k": 10})
 
 class RAGGraphState(TypedDict):
     messages: Annotated[Sequence[BaseMessage], add_messages]
@@ -521,6 +463,7 @@ class RAGApplication:
                                                                                 vector_dimension=int(parser['QDRANT']['vector_dimension']))
 
         self.rag_chain = None
+        logging.info("Called RAGApplication constructor()")
 
     def ingest_data(self, docs_path: str):
         print("Ingesting documents...")
@@ -534,14 +477,16 @@ class RAGApplication:
 
     def load_store(self):
         logging.info("Loading vector store")
-        # self.vector_manager.load_vector_store()
-        if not self.vector_manager.check_if_collection_exists():
-            logging.info("Vector store is not created, hence creating")
-            self.vector_manager.create_vectorstore()
+        if self.rag_chain is None:
+            # self.vector_manager.load_vector_store()
+            if not self.vector_manager.check_if_collection_exists():
+                logging.info("Vector store is not created, hence creating")
+                self.vector_manager.create_vectorstore()
 
-        self.vector_manager.load_vector_store()
-        logging.info("loaded vector store")
-        self.rag_chain = RAGRetriever(vector_store=self.vector_manager.vector_store, pg_connection_pool = None)
+            self.vector_manager.load_vector_store()
+            logging.info("loaded vector store")
+            self.rag_chain = RAGRetriever(vector_store=self.vector_manager.vector_store, pg_connection_pool=None)
+        logging.info("Finished loading vector store")
 
     async def answer_question(self, question: str, chat_history: str) -> str:
         if self.rag_chain is None:
@@ -626,77 +571,6 @@ class RAGApplication:
         #
         # return async_response
         # return self.rag_chain.query(question, chat_history)
-
-
-class ChatHistoryHandler:
-    def __init__(self):
-        self.chatHistoryMongoDB = ChatHistoryDB(username = parser['MONGODB']['mongodb_username'],
-                                          password = parser['MONGODB']['mongodb_password'],
-                                          hostname = parser['MONGODB']['mongodb_hostname'],
-                                          database = parser['MONGODB']['mongodb_database'],
-                                          keyspace = parser['MONGODB']['mongodb_keyspace'],
-                                          port = parser['MONGODB']['mongodb_port']
-                                          )
-
-    def retrive_chat(self, username, session_id, record_limit):
-        results = self.chatHistoryMongoDB.get_record(username=username, session_id=session_id, record_limit=record_limit)
-        return results
-
-    def insert_chat_record(self, message, username, session_id, timestamp, role):
-        data = {
-            "key": username + "_" + session_id + "_" + timestamp,
-            "data": message,
-            "username": username,
-            "session_id": session_id,
-            "timestamp": timestamp,
-            "role": role
-        }
-        self.chatHistoryMongoDB.insert_record(data)
-
-class ChatSessionListHandler:
-    def __init__(self):
-        self.chatSessionMySQL = MySQLDB(host = parser["MYSQL"]["mysql_hostname"],
-                                        port = parser["MYSQL"]["mysql_port"],
-                                        username = parser["MYSQL"]["mysql_username"],
-                                        password = parser["MYSQL"]["mysql_password"],
-                                        database = parser["MYSQL"]["mysql_database"]
-                                        )
-
-    def retrive_chat(self, username):
-        results = self.chatSessionMySQL.get_chat_sessions_by_username(username=username)
-        return results
-
-    def insert_chat_record(self, session_id, username, description, timestamp):
-        self.chatSessionMySQL.insert_new_session(
-            session_id = session_id,
-            username = username,
-            description = description,
-            timestamp = timestamp
-        )
-
-    '''
-    Authenticate user
-    '''
-    def authenticate(self, username, password):
-        response = authenticate_user(username, password, self.chatSessionMySQL)
-        if response:
-            logging.info("main - authenticate()")
-            logging.info(response)
-            data = {"sub": username}
-            token = create_access_token(data, parser['ENCRYPTION']['SECRET_KEY'], parser['ENCRYPTION']['ALGORITHM'],
-                                        int(parser['ENCRYPTION']['ACCESS_TOKEN_EXPIRE_MINUTES']))
-            return token
-        return response
-
-    def update_stock_token_controller(self, token, username):
-        logging.info("Calling update_stock_token_controller()")
-        logging.info(token)
-        current_time = datetime.today().strftime('%Y-%m-%d %H:%M:%S')
-        self.chatSessionMySQL.update_stock_token(token, current_time, username)
-        return {"message": "Successfully Updated the stock token"}
-
-    def get_stock_token_controller(self, username):
-        return self.chatSessionMySQL.get_basic_user_info(username)
 
 
 async def query_data(query):
