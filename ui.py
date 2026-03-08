@@ -17,8 +17,7 @@ import time
 
 st.set_page_config(
     page_title="Wiki-RAG",
-    page_icon="./config/RAG_IDOC_rounded.png",
-    layout="wide"
+    page_icon="./config/RAG_IDOC_rounded.png"
 )
 
 
