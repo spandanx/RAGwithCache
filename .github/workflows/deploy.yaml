@@ -61,7 +61,7 @@ jobs:
           context: .
           file: ./Dockerfile
           push: true
-          tags: ${{ secrets.DOCKER_USERNAME }}/wiki_rag:1.2
+          tags: ${{ secrets.DOCKER_USERNAME }}/wiki_rag:1.3
 
   deploy:
     runs-on: ubuntu-latest

@@ -248,9 +248,9 @@ class RAGRetriever:
             logging.info(state["query"])
             logging.info(doc.page_content)
             logging.info(output)
-            if output.score > 0.8:
+            if output.score >= 0.8:
                 relevant_doc_flag = True
-            if output.score>0.5:
+            if output.score > 0.5:
                 relevant_docs.append(doc)
 
         # context = "\n\n".join(["Content: " + doc.page_content + "\n Source: " + doc.metadata["source"] for doc in relevant_docs])
@@ -652,7 +652,8 @@ if __name__ == "__main__":
     # query = "What was the cricket score in india vs Namibia?"
     query = "Major mountains peaks in the North East?"
     # query = "What are the major travelling destinations in North East?"
-    # asyncio.run(query_data(query))
+    response = asyncio.run(query_data(query))
+    x = 1
     # while True:
     #     # query = input("question - ")
     #     query = "Which is the highest peak in Northeast?"
