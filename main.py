@@ -1,33 +1,24 @@
 import asyncio
-from typing import List, TypedDict, Annotated, Sequence, Optional
+from typing import TypedDict, Annotated, Sequence
 
 import logging
 
-from langchain.chains.llm import LLMChain
-from langchain.chains.retrieval_qa.base import RetrievalQA
-
 from langchain_core.messages import BaseMessage, AIMessageChunk
 from langchain_core.output_parsers import PydanticOutputParser, JsonOutputParser, StrOutputParser
-from langchain_core.prompts import PromptTemplate, ChatPromptTemplate
+from langchain_core.prompts import PromptTemplate
 from langchain_core.runnables import RunnableConfig
 from langchain_openai import ChatOpenAI, OpenAIEmbeddings
-from langchain_google_genai import ChatGoogleGenerativeAI
-
-# from langchain_community.vectorstores import Qdrant
 
 from langgraph.checkpoint.postgres import PostgresSaver
-from langgraph.store.memory import InMemoryStore
 from langgraph.store.postgres import PostgresStore
-# from langgraph.store.base import BaseStore
 
 from langgraph.graph import StateGraph, add_messages, END
 from pydantic import BaseModel
-from pydantic.v1 import Field
 
 from langchain.retrievers.document_compressors import CrossEncoderReranker
 from langchain_community.cross_encoders import HuggingFaceCrossEncoder
 
-from langgraph.types import Command, interrupt
+from langgraph.types import Command
 from typing_extensions import Literal
 
 from redisvl.extensions.cache.llm import SemanticCache
@@ -37,7 +28,6 @@ from langchain_community.tools.tavily_search import TavilySearchResults
 from src.components.VectorStore.VectorStoreHandler import VectorStore, DocumentLoader
 
 import redis
-import datetime
 
 import os
 from dotenv import load_dotenv
@@ -61,8 +51,6 @@ user_id = "1"
 namespace_for_memory = (user_id, "memories")
 
 #parser['CACHE']['cache_key']
-
-# from qdrant_client.http.models import Distance
 
 class RAGGraphState(TypedDict):
     messages: Annotated[Sequence[BaseMessage], add_messages]
@@ -382,7 +370,8 @@ class RAGRetriever:
             self.llmcache.store(
                 prompt=state["query"],
                 response=state["final_response"],
-                vector=state["query_embedding"]
+                vector=state["query_embedding"],
+                ttl=86400 #24 hours
             )
             logging.info("Cached answer")
         logging.info("Generated final answer, query: " + state["query"])
@@ -404,7 +393,6 @@ class RAGRetriever:
         graph.add_node("web_search", self.web_search)
         graph.add_node("generate", self.generate)
         graph.add_node("final_node", self.final_node)
-        # graph.add_edge("vector_retriever", "generate")
         graph.set_entry_point("cache_checker")
         graph.set_finish_point("final_node")
         # pg_url = f"postgresql://{parser['POSTGRES']['username']}:{parser['POSTGRES']['password']}@{parser['POSTGRES']['hostname']}:{parser['POSTGRES']['port']}/{parser['POSTGRES']['database']}?sslmode=disable"
@@ -499,6 +487,7 @@ class RAGApplication:
         if self.rag_chain is None:
             self.load_store()
         async for event in self.rag_chain.query(question, chat_history):
+            # logging.info("Streaming from stream_answer_question()")
             # logging.info(event)
             # if 'metadata' in event and 'langgraph_node' in event['metadata']:
             if 'metadata' in event:
