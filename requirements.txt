@@ -25,3 +25,4 @@ qdrant-client==1.14.2
 sentence-transformers
 openai==1.98.0
 fastapi==0.115.9
+ragas

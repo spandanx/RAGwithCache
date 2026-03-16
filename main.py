@@ -440,6 +440,32 @@ class RAGRetriever:
             yield event
         # return graph.astream_events(input={"query": query, "chat_history": chat_history}, config=config, version="v2")
 
+    def synced_query(self, query, chat_history):
+        # logging.info("STREAM DATA")
+        # logging.info("Query answer")
+        # logging.info(response)
+        pg_url = f"postgresql://{parser['POSTGRES']['username']}:{parser['POSTGRES']['password']}@{parser['POSTGRES']['hostname']}:{parser['POSTGRES']['port']}/{parser['POSTGRES']['database']}?sslmode=disable"
+
+        connection_kwargs = {
+            "autocommit": True,
+            "prepare_threshold": 0,
+        }
+
+        conn = Connection.connect(pg_url, **connection_kwargs)
+        store = PostgresStore(conn)
+        # store.setup()
+
+        checkpointer = PostgresSaver(conn)
+        # checkpointer = InMemoryStore()
+        # checkpointer.setup()
+
+        # graph = self.graph.compile(checkpointer=checkpointer, store = store)
+        graph = self.graph.compile(store=store)
+        config = {"configurable": {"thread_id": "2", "user_id": "user_123"}}
+        # response = graph.invoke({"query": query, "chat_history": chat_history}, config)
+        # return response["final_response"]
+        return graph.invoke(input={"query": query, "chat_history": chat_history}, config=config)
+
 class RAGApplication:
     def __init__(self):
 
@@ -479,8 +505,7 @@ class RAGApplication:
     async def answer_question(self, question: str, chat_history: str) -> str:
         if self.rag_chain is None:
             self.load_store()
-        async for event in self.rag_chain.query(question, chat_history):
-            yield event
+        return self.rag_chain.synced_query(question, chat_history)
 
 
     async def stream_answer_question(self, question: str, chat_history: str) -> str:

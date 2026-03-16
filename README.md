@@ -27,6 +27,8 @@ Frontend - `Streamlit`
 
 Backend - `Python`, `LangGraph`, `Python`, `redis`, `MongoDB`, `MySQL`, `PostgreSQL`
 
+Deployment - `Docker`, `Kubernetes`, `Github Actions`
+
 ## Steps to run locally
 
 ### Step 1. Clone the repositories
@@ -79,6 +81,10 @@ The (.env) environment file should contain OPENAI_API_KEY and TAVILY_API_KEY
 <p>Store chat</p>
 
 ![SESSION_MANAGEMENT_STORE_CHAT](https://github.com/user-attachments/assets/67f7bcac-8671-45e8-a813-f8f19ae7888a)
+
+<p>Ragas Score</p>
+
+![RAGAS_SCORE](https://github.com/user-attachments/assets/06a83215-8ef9-4b1b-a1da-515b35a2bb83)
 
 ### Youtube link
 https://youtu.be/eFo-KTK-K-o
